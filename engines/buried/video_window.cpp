@@ -21,8 +21,10 @@
 
 #include "buried/buried.h"
 #include "buried/graphics.h"
+#include "buried/subtitle_manager.h"
 #include "buried/video_window.h"
 
+#include "common/config-manager.h"
 #include "common/system.h"
 #include "common/keyboard.h"
 #include "graphics/surface.h"
@@ -104,6 +106,7 @@ bool VideoWindow::openVideo(const Common::Path &fileName) {
 	closeVideo();
 
 	_video = new Video::AVIDecoder();
+	_mediaId = fileName.getLastComponent().toString();
 
 	if (!_video->loadFile(fileName)) {
 		closeVideo();
@@ -196,6 +199,36 @@ void VideoWindow::onPaint() {
 			_vm->_gfx->blit(_lastFrame, absoluteRect.left, absoluteRect.top, absoluteRect.width(), absoluteRect.height());
 		else
 			_vm->_gfx->crossBlit(_vm->_gfx->getScreen(), absoluteRect.left + _dstRect.left, absoluteRect.top + _dstRect.top, _dstRect.width(), _dstRect.height(), _lastFrame, _srcRect.left, _srcRect.top);
+
+		if (_video && _video->isPlaying() && _vm->_subtitles && !_mediaId.empty()) {
+			uint32 currentMs = _video->getTime();
+			const SubtitleEntry *sub = _vm->_subtitles->getSubtitleForTime(_mediaId, currentMs);
+			if (sub) {
+				Common::Rect videoFrameRect;
+				if (_srcRect.isEmpty() && _dstRect.isEmpty()) {
+					videoFrameRect = absoluteRect;
+				} else {
+					videoFrameRect = Common::Rect(
+						absoluteRect.left + _dstRect.left,
+						absoluteRect.top + _dstRect.top,
+						absoluteRect.left + _dstRect.right,
+						absoluteRect.top + _dstRect.bottom
+					);
+				}
+
+				int fontHeight = _vm->_subtitles->getFontHeight();
+				int boxHeight = (fontHeight * 2) + 8;
+
+				Common::Rect videoSubBox(
+					videoFrameRect.left,
+					videoFrameRect.bottom - boxHeight,
+					videoFrameRect.right,
+					videoFrameRect.bottom
+				);
+
+				_vm->_subtitles->renderSubtitle(_vm->_gfx->getScreen(), videoSubBox, *sub);
+			}
+		}
 	}
 }
 

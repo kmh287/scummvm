@@ -87,10 +87,22 @@ Graphics::Font *GraphicsManager::createArialFont(int size, bool bold) const {
 
 	// Map the heights needed to point sizes
 	if (bold) {
-		if (size != 20)
-			error("Unhandled Arial Bold height %d", size);
-
-		size = 12;
+		switch (size) {
+		case 12:
+		case 13:
+			size = 7;
+			break;
+		case 14:
+			size = 8;
+			break;
+		case 20:
+			size = 12; // Preserve original size 20 mapping for death/completion screens
+			break;
+		default:
+			size = (size * 8) / 14;
+			if (size < 6) size = 6;
+			break;
+		}
 	} else {
 		switch (size) {
 		case 12:
@@ -101,7 +113,9 @@ Graphics::Font *GraphicsManager::createArialFont(int size, bool bold) const {
 			size = 8;
 			break;
 		default:
-			error("Unhandled Arial height %d", size);
+			size = (size * 8) / 14;
+			if (size < 6) size = 6;
+			break;
 		}
 	}
 

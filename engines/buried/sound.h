@@ -61,6 +61,9 @@ public:
 	bool playAsynchronousAIComment(const Common::Path &fileName);
 	bool isAsynchronousAICommentPlaying();
 	void stopAsynchronousAIComment();
+	bool isAIVoicePlaying();
+	uint32 getAIVoicePosition();
+	Common::String getAIVoiceMediaId();
 
 	// SOUND EFFECTS FUNCTIONS
 	int playSoundEffect(const Common::Path &fileName, int volume = 127, bool loop = false, bool oneShot = true);
@@ -73,6 +76,7 @@ public:
 	bool playInterfaceSound(const Common::Path &fileName);
 	bool stopInterfaceSound();
 	bool isInterfaceSoundPlaying();
+	uint32 getInterfaceSoundPosition();
 
 	// START AND STOP SPECIFIED FOOTSTEPS SOUND
 	bool startFootsteps(int footstepsID);
@@ -150,6 +154,7 @@ private:
 	Common::Path _effectsFileNames[2];
 	Common::Path _interfaceFileName;
 	Common::Path _arthurFileName;
+	Common::String _currentAIVoiceMediaId;
 };
 
 } // End of namespace Buried

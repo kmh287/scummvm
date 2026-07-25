@@ -345,6 +345,7 @@ bool SoundManager::playSynchronousAIComment(const Common::Path &fileName) {
 	if (!_soundData[kAIVoiceIndex]->load(fileName))
 		return false;
 
+	_currentAIVoiceMediaId = fileName.getLastComponent().toString();
 	_soundData[kAIVoiceIndex]->_soundType = Audio::Mixer::kSpeechSoundType;
 
 	// Play the file
@@ -375,6 +376,8 @@ bool SoundManager::playAsynchronousAIComment(const Common::Path &fileName) {
 	if (!_soundData[kAIVoiceIndex]->load(fileName))
 		return false;
 
+	_currentAIVoiceMediaId = fileName.getLastComponent().toString();
+
 	// Set some parameters
 	_soundData[kAIVoiceIndex]->_flags = SOUND_FLAG_DESTROY_AFTER_COMPLETION;
 	_soundData[kAIVoiceIndex]->_volume = 127;
@@ -389,6 +392,24 @@ bool SoundManager::isAsynchronousAICommentPlaying() {
 		return false;
 
 	return _soundData[kAIVoiceIndex]->isPlaying();
+}
+
+bool SoundManager::isAIVoicePlaying() {
+	if (_paused || !_soundData[kAIVoiceIndex]->_handle)
+		return false;
+
+	return _soundData[kAIVoiceIndex]->isPlaying();
+}
+
+uint32 SoundManager::getAIVoicePosition() {
+	if (_paused || !_soundData[kAIVoiceIndex]->_handle)
+		return 0;
+
+	return g_system->getMixer()->getSoundElapsedTime(*_soundData[kAIVoiceIndex]->_handle);
+}
+
+Common::String SoundManager::getAIVoiceMediaId() {
+	return _currentAIVoiceMediaId;
 }
 
 void SoundManager::stopAsynchronousAIComment() {
@@ -572,6 +593,13 @@ bool SoundManager::isInterfaceSoundPlaying() {
 		return false;
 
 	return _soundData[kInterfaceIndex]->isPlaying();
+}
+
+uint32 SoundManager::getInterfaceSoundPosition() {
+	if (_paused || !_soundData[kInterfaceIndex]->_handle)
+		return 0;
+
+	return g_system->getMixer()->getSoundElapsedTime(*_soundData[kInterfaceIndex]->_handle);
 }
 
 bool SoundManager::startFootsteps(int footstepsID) {

@@ -28,7 +28,9 @@
 #include "buried/overview.h"
 #include "buried/resources.h"
 #include "buried/sound.h"
+#include "buried/subtitle_manager.h"
 
+#include "common/config-manager.h"
 #include "graphics/surface.h"
 
 namespace Buried {
@@ -69,7 +71,7 @@ bool OverviewWindow::startOverview() {
 	invalidateWindow();
 	setFocus();
 
-	_timer = setTimer(1000);
+	_timer = setTimer(100);
 	return true;
 }
 
@@ -94,6 +96,23 @@ void OverviewWindow::onPaint() {
 			break;
 		}
 	}
+
+	Common::String mediaId = "";
+	switch (_currentStatus) {
+	case 0: mediaId = "IO_AUD_1"; break;
+	case 1: mediaId = "IO_AUD_2"; break;
+	case 2: mediaId = "IO_AUD_3"; break;
+	case 3: mediaId = "IO_AUD_4"; break;
+	case 4: mediaId = "IO_AUD_5"; break;
+	}
+
+	if (!mediaId.empty() && _vm->_subtitles && _vm->_sound->isInterfaceSoundPlaying()) {
+		uint32 currentMs = _vm->_sound->getInterfaceSoundPosition();
+		const SubtitleEntry *sub = _vm->_subtitles->getSubtitleForTime(mediaId, currentMs);
+		if (sub) {
+			_vm->_subtitles->renderSubtitle(_vm->_gfx->getScreen(), *sub);
+		}
+	}
 }
 
 bool OverviewWindow::onEraseBackground() {
@@ -116,14 +135,19 @@ void OverviewWindow::onActionEnd(const Common::CustomEventType &action, uint fla
 void OverviewWindow::onTimer(uint timer) {
 	_vm->_sound->timerCallback();
 
-	if (_currentStatus >= 0 && _vm->_sound->isInterfaceSoundPlaying())
+	if (_currentStatus >= 0 && _vm->_sound->isInterfaceSoundPlaying()) {
+		invalidateWindow();
+		_vm->_gfx->updateScreen();
 		return;
+	}
 
 	if (_currentImage) {
 		_currentImage->free();
 		delete _currentImage;
 		_currentImage = nullptr;
 	}
+
+	invalidateWindow();
 
 	// Switch on the current status in order to determine which action to take next
 	switch (_currentStatus) {

@@ -48,6 +48,7 @@
 #include "buried/resources.h"
 #include "buried/scene_view.h"
 #include "buried/sound.h"
+#include "buried/subtitle_manager.h"
 #include "buried/video_window.h"
 #include "buried/window.h"
 
@@ -58,6 +59,7 @@ BuriedEngine::BuriedEngine(OSystem *syst, const ADGameDescription *gameDesc) : E
 	_mainEXE = nullptr;
 	_library = nullptr;
 	_sound = nullptr;
+	_subtitles = nullptr;
 	_timerSeed = 0;
 	_mainWindow = nullptr;
 	_focusedWindow = nullptr;
@@ -82,6 +84,7 @@ BuriedEngine::~BuriedEngine() {
 	delete _mainEXE;
 	delete _library;
 	delete _sound;
+	delete _subtitles;
 
 	// The queue should be empty since all windows destroy their messages
 }
@@ -130,6 +133,7 @@ Common::Error BuriedEngine::run() {
 
 	_gfx = new GraphicsManager(this);
 	_sound = new SoundManager(this);
+	_subtitles = new SubtitleManager(this);
 	_mainWindow = new FrameWindow(this);
 	_mainWindow->showWindow(Window::kWindowShow);
 

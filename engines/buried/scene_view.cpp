@@ -37,10 +37,12 @@
 #include "buried/video_window.h"
 #include "buried/environ/scene_base.h"
 
+#include "common/config-manager.h"
 #include "common/ptr.h"
 #include "common/stream.h"
 #include "common/system.h"
 #include "graphics/surface.h"
+#include "buried/subtitle_manager.h"
 
 namespace Buried {
 
@@ -58,6 +60,7 @@ SceneViewWindow::SceneViewWindow(BuriedEngine *vm, Window *parent) : Window(vm, 
 	_asyncMovie = nullptr;
 	_asyncMovieStartFrame = 0;
 	_loopAsyncMovie = false;
+	_lastAIVoicePlaying = false;
 	_paused = false;
 	_cycleEnabled = ((FrameWindow *)(_parent->getParent()))->isFrameCyclingDefault();
 	_forceCycleEnabled = false;
@@ -2395,6 +2398,15 @@ void SceneViewWindow::onPaint() {
 
 		if (_useScenePaint)
 			_currentScene->gdiPaint(this);
+
+		if (_vm->_subtitles && _vm->_sound->isAIVoicePlaying()) {
+			Common::String mediaId = _vm->_sound->getAIVoiceMediaId();
+			uint32 currentMs = _vm->_sound->getAIVoicePosition();
+			const SubtitleEntry *sub = _vm->_subtitles->getSubtitleForTime(mediaId, currentMs);
+			if (sub) {
+				_vm->_subtitles->renderSubtitle(_vm->_gfx->getScreen(), *sub);
+			}
+		}
 	}
 }
 
@@ -2422,6 +2434,12 @@ void SceneViewWindow::onTimer(uint timer) {
 
 	if (_currentScene && !_infoWindowDisplayed && !_bioChipWindowDisplayed && !_burnedLetterDisplayed)
 		_currentScene->timerCallback(this);
+
+	bool aiVoicePlaying = sound->isAIVoicePlaying();
+	if (_vm->_subtitles && (aiVoicePlaying || _lastAIVoicePlaying)) {
+		invalidateWindow(false);
+		_lastAIVoicePlaying = aiVoicePlaying;
+	}
 
 	sound->timerCallback();
 }
