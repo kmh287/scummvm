@@ -31,6 +31,7 @@
 #include "buried/navarrow.h"
 #include "buried/resources.h"
 #include "buried/sound.h"
+#include "buried/subtitle_manager.h"
 #include "buried/scene_view.h"
 #include "buried/environ/scene_common.h"
 
@@ -649,7 +650,7 @@ int InteractiveNewsNetwork::movieCallback(Window *viewWindow, VideoWindow *movie
 	if (animationID == -1 && status == MOVIE_STOPPED) {
 		_vm->_sound->restart();
 		if (_vm->_subtitles)
-			viewWindow->invalidateWindow(false);
+			_vm->_subtitles->invalidateSubtitles(viewWindow);
 		return SC_FALSE;
 	}
 
@@ -662,7 +663,7 @@ int InteractiveNewsNetwork::timerCallback(Window *viewWindow) {
 		_audioChannel = -1;
 		_playingAudio = false;
 		if (_vm->_subtitles)
-			viewWindow->invalidateWindow(false);
+			_vm->_subtitles->invalidateSubtitles(viewWindow);
 	}
 
 	return SC_TRUE;

@@ -207,8 +207,8 @@ void VideoWindow::onPaint() {
 			Common::Rect videoSubBox = calculateSubtitleBounds(boxHeight);
 			_vm->_subtitles->renderSubtitleForMedia(_vm->_gfx->getScreen(), videoSubBox, _mediaId, _video->getTime());
 		} else if (_lastSubtitledPlaying && !isPlayingNow) {
-			if (getParent())
-				getParent()->invalidateWindow(false);
+			if (_vm->_subtitles)
+				_vm->_subtitles->invalidateSubtitles(getParent());
 		}
 		_lastSubtitledPlaying = isPlayingNow;
 	}
@@ -227,11 +227,24 @@ Common::Rect VideoWindow::calculateSubtitleBounds(int boxHeight) const {
 			absoluteRect.top + _dstRect.bottom
 		);
 	}
+
+	// For full-screen cutscene videos (height >= 300, e.g. Intro video), anchor inside the bottom of the video frame
+	if (videoFrameRect.height() >= 300) {
+		int bottomPadding = 12;
+		return Common::Rect(
+			videoFrameRect.left + kSubtitleBoxX,
+			videoFrameRect.bottom - boxHeight - bottomPadding,
+			videoFrameRect.left + kSubtitleBoxX + kSubtitleBoxWidth,
+			videoFrameRect.bottom - bottomPadding
+		);
+	}
+
+	// For standard viewport videos (432x189), position directly below the viewport, expanding to cover the side bezel lips
 	return Common::Rect(
-		videoFrameRect.left,
-		videoFrameRect.bottom - boxHeight,
-		videoFrameRect.right,
-		videoFrameRect.bottom
+		videoFrameRect.left - 6,
+		videoFrameRect.bottom,
+		videoFrameRect.right + 6,
+		videoFrameRect.bottom + boxHeight
 	);
 }
 

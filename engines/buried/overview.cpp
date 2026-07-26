@@ -106,7 +106,7 @@ void OverviewWindow::onPaint() {
 	case 4: mediaId = "IO_AUD_5"; break;
 	}
 
-	if (!mediaId.empty() && _vm->_subtitles && _vm->_sound->isInterfaceSoundPlaying()) {
+	if (!mediaId.empty() && _vm->_subtitles && _vm->_subtitles->areSubtitlesEnabled() && _vm->_sound->isInterfaceSoundPlaying()) {
 		_vm->_subtitles->renderSubtitleForMedia(_vm->_gfx->getScreen(), mediaId, _vm->_sound->getInterfaceSoundPosition());
 	}
 }
@@ -132,8 +132,10 @@ void OverviewWindow::onTimer(uint timer) {
 	_vm->_sound->timerCallback();
 
 	if (_currentStatus >= 0 && _vm->_sound->isInterfaceSoundPlaying()) {
-		invalidateWindow();
-		_vm->_gfx->updateScreen();
+		if (_vm->_subtitles && _vm->_subtitles->areSubtitlesEnabled()) {
+			invalidateWindow();
+			_vm->_gfx->updateScreen();
+		}
 		return;
 	}
 

@@ -363,6 +363,10 @@ bool SoundManager::playSynchronousAIComment(const Common::Path &fileName) {
 	// Now that is has been played, kill it here and now
 	delete _soundData[kAIVoiceIndex];
 	_soundData[kAIVoiceIndex] = new Sound();
+	_currentAIVoiceMediaId.clear();
+
+	if (_vm->_subtitles)
+		_vm->_subtitles->invalidateSubtitles();
 
 	_vm->enableCutsceneKeymap(false);
 
@@ -417,6 +421,9 @@ Common::String SoundManager::getAIVoiceMediaId() {
 void SoundManager::stopAsynchronousAIComment() {
 	if (isAsynchronousAICommentPlaying()) {
 		_soundData[kAIVoiceIndex]->stop();
+		_currentAIVoiceMediaId.clear();
+		if (_vm->_subtitles)
+			_vm->_subtitles->invalidateSubtitles();
 	}
 }
 
@@ -502,8 +509,8 @@ bool SoundManager::playSynchronousSoundEffect(const Common::Path &fileName, int 
 	_syncSoundMediaId.clear();
 
 	// Clear subtitle overlay when playback finishes
-	if (_vm->_mainWindow)
-		_vm->_mainWindow->invalidateWindow(false);
+	if (_vm->_subtitles)
+		_vm->_subtitles->invalidateSubtitles();
 
 	_vm->enableCutsceneKeymap(false);
 

@@ -2438,7 +2438,7 @@ void SceneViewWindow::onTimer(uint timer) {
 	bool aiVoicePlaying = sound->isAIVoicePlaying();
 	bool syncSoundPlaying = sound->isSyncSoundPlaying();
 	if (_vm->_subtitles && (aiVoicePlaying || _lastAIVoicePlaying || syncSoundPlaying || _lastSyncSoundPlaying)) {
-		invalidateWindow(false);
+		_vm->_subtitles->invalidateSubtitles(this);
 		_lastAIVoicePlaying = aiVoicePlaying;
 		_lastSyncSoundPlaying = syncSoundPlaying;
 	}

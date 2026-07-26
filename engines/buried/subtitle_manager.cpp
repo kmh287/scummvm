@@ -22,6 +22,7 @@
 #include "buried/buried.h"
 #include "buried/graphics.h"
 #include "buried/subtitle_manager.h"
+#include "buried/window.h"
 
 #include "common/config-manager.h"
 #include "common/file.h"
@@ -39,6 +40,26 @@ SubtitleManager::SubtitleManager(BuriedEngine *vm) : _vm(vm), _font(nullptr), _f
 SubtitleManager::~SubtitleManager() {
 	delete _font;
 	delete _fontBold;
+}
+
+bool SubtitleManager::areSubtitlesEnabled() const {
+	return ConfMan.getBool("subtitles");
+}
+
+void SubtitleManager::invalidateSubtitles(Window *targetWindow) {
+	if (!areSubtitlesEnabled())
+		return;
+
+	if (targetWindow) {
+		targetWindow->invalidateWindow(false);
+	} else if (_vm->_mainWindow) {
+		_vm->_mainWindow->invalidateWindow(false);
+	}
+
+	int fontHeight = getFontHeight();
+	int calculatedBoxHeight = (fontHeight * 2) + 8;
+	Common::Rect boxRect(kSubtitleBoxX, kSubtitleViewportTop, kSubtitleBoxX + kSubtitleBoxWidth, kSubtitleViewportTop + calculatedBoxHeight);
+	_vm->_gfx->invalidateRect(boxRect, false);
 }
 
 void SubtitleManager::updateFont() {
@@ -161,6 +182,9 @@ const SubtitleEntry *SubtitleManager::getSubtitleForTime(const Common::String &m
 }
 
 bool SubtitleManager::renderSubtitleForMedia(Graphics::Surface *destSurface, const Common::String &mediaId, uint32 currentMs) {
+	if (!areSubtitlesEnabled())
+		return false;
+
 	const SubtitleEntry *sub = getSubtitleForTime(mediaId, currentMs);
 	if (!sub)
 		return false;
@@ -169,6 +193,9 @@ bool SubtitleManager::renderSubtitleForMedia(Graphics::Surface *destSurface, con
 }
 
 bool SubtitleManager::renderSubtitleForMedia(Graphics::Surface *destSurface, const Common::Rect &boxRect, const Common::String &mediaId, uint32 currentMs) {
+	if (!areSubtitlesEnabled())
+		return false;
+
 	const SubtitleEntry *sub = getSubtitleForTime(mediaId, currentMs);
 	if (!sub)
 		return false;
@@ -179,8 +206,8 @@ bool SubtitleManager::renderSubtitleForMedia(Graphics::Surface *destSurface, con
 void SubtitleManager::renderSubtitle(Graphics::Surface *destSurface, const SubtitleEntry &entry) {
 	updateFont();
 	int fontHeight = _font ? _font->getFontHeight() : 14;
-	int calculatedBoxHeight = (fontHeight * 2) + 8;
-	Common::Rect defaultBox(kSubtitleBoxX, kSubtitleViewportBottom - calculatedBoxHeight, kSubtitleBoxX + kSubtitleBoxWidth, kSubtitleViewportBottom);
+	int calculatedBoxHeight = (fontHeight * 2) + 12;
+	Common::Rect defaultBox(kSubtitleBoxX, kSubtitleViewportTop, kSubtitleBoxX + kSubtitleBoxWidth, kSubtitleViewportTop + calculatedBoxHeight);
 	renderSubtitle(destSurface, defaultBox, entry);
 }
 
@@ -204,14 +231,20 @@ void SubtitleManager::renderSubtitle(Graphics::Surface *destSurface, const Commo
 	byte targetB = 12;
 	uint32 scrimColor = _vm->_gfx->getColor(targetR, targetG, targetB);
 	
-	// Glowing orange/copper border color matching HUD
-	uint32 borderColor = _vm->_gfx->getColor(237, 109, 66);
+	// Glowing orange/copper border color for bottom line matching HUD
+	uint32 bottomBorderColor = _vm->_gfx->getColor(237, 109, 66);
+
+	// Subtle dark red/brown border color for left/right side edges and chamfers
+	uint32 sideBorderColor = _vm->_gfx->getColor(105, 36, 28);
+
+	// Muted copper-orange border color for top accent line (Option 2b)
+	uint32 topBorderColor = _vm->_gfx->getColor(140, 60, 35);
 
 	// -----------------------------------------------------------------------
-	// Render subtitle box scrim & top chamfered border.
+	// Render subtitle box scrim & bottom chamfered border.
 	//
-	// 1. Chamfer Cutouts: For the top 6 rows (dy < 6), inset the left and right
-	//    bounds by (6 - dy) * 2 pixels. This creates a 30-degree bevel angle
+	// 1. Chamfer Cutouts: For the bottom 6 rows (distFromBottom < 6), inset the left and right
+	//    bounds by (6 - distFromBottom) * 2 pixels. This creates a 30-degree bevel angle
 	//    (2:1 horizontal-to-vertical slope ratio) matching the suit HUD.
 	// 2. CRT Scanline Interlacing: Alternate row opacity (1.15x alpha on even rows,
 	//    0.85x alpha on odd rows) to simulate an interlaced glass CRT monitor.
@@ -220,9 +253,10 @@ void SubtitleManager::renderSubtitle(Graphics::Surface *destSurface, const Commo
 		if (y < 0 || y >= destSurface->h) continue;
 
 		int dy = y - boxRect.top;
+		int distFromBottom = (boxRect.bottom - 1) - y;
 		int inset = 0;
-		if (dy < 6) {
-			inset = (6 - dy) * 2; // 30-degree chamfer slope (2:1 horizontal-to-vertical ratio)
+		if (distFromBottom < 6) {
+			inset = (6 - distFromBottom) * 2; // 30-degree chamfer slope (2:1 horizontal-to-vertical ratio)
 		}
 
 		int startX = boxRect.left + inset;
@@ -237,19 +271,24 @@ void SubtitleManager::renderSubtitle(Graphics::Surface *destSurface, const Commo
 		for (int x = startX; x < endX; ++x) {
 			if (x < 0 || x >= destSurface->w) continue;
 
-			// Border pixels: top horizontal line + diagonal 30-degree chamfer edges
-			bool isBorderPixel = (dy == 0) || (dy < 6 && (x == startX || x == endX - 1));
+			// Border pixels: top line (muted copper-orange), bottom line (bright orange), side/diagonal edges (subtle dark red)
+			bool isTopBorder    = (y == boxRect.top);
+			bool isBottomBorder = (y == boxRect.bottom - 1);
+			bool isSideBorder   = (x == startX || x == endX - 1);
+			bool isBorderPixel  = isTopBorder || isBottomBorder || isSideBorder;
 
 			if (isBorderPixel) {
+				uint32 curBorderColor = isTopBorder ? topBorderColor : (isBottomBorder ? bottomBorderColor : sideBorderColor);
+
 				if (destSurface->format.bytesPerPixel == 2) {
 					uint16 *ptr = (uint16 *)destSurface->getBasePtr(x, y);
-					*ptr = (uint16)borderColor;
+					*ptr = (uint16)curBorderColor;
 				} else if (destSurface->format.bytesPerPixel == 4) {
 					uint32 *ptr = (uint32 *)destSurface->getBasePtr(x, y);
-					*ptr = borderColor;
+					*ptr = curBorderColor;
 				} else {
 					byte *ptr = (byte *)destSurface->getBasePtr(x, y);
-					*ptr = (byte)borderColor;
+					*ptr = (byte)curBorderColor;
 				}
 			} else {
 				if (destSurface->format.bytesPerPixel == 2) {
@@ -281,7 +320,7 @@ void SubtitleManager::renderSubtitle(Graphics::Surface *destSurface, const Commo
 	uint32 dialogueColor = _vm->_gfx->getColor(255, 230, 180);
 
 	const int kPadX = 8;  // horizontal inner padding
-	const int kPadY = 4;  // vertical inner padding
+	const int kPadY = 2;  // balanced visual top & bottom vertical inner padding
 	const int innerW  = boxRect.width() - kPadX * 2;
 	const int innerX  = boxRect.left + kPadX;
 	int curY = boxRect.top + kPadY;
@@ -311,6 +350,8 @@ void SubtitleManager::renderSubtitle(Graphics::Surface *destSurface, const Commo
 	if (lines.size() >= 2 && curY + fontHeight <= boxRect.bottom) {
 		_font->drawString(destSurface, lines[1], innerX, curY, innerW, dialogueColor, Graphics::kTextAlignLeft);
 	}
+
+	_vm->_gfx->invalidateRect(boxRect, false);
 }
 
 Common::Array<Common::String> SubtitleManager::wrapText(const Common::String &text, int line1AvailW, int line2AvailW) {

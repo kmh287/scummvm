@@ -93,6 +93,7 @@ Common::Error BuriedEngine::run() {
 	setDebugger(new BuriedConsole(this));
 
 	ConfMan.registerDefault("skip_support", true);
+	ConfMan.registerDefault("subtitles", false);
 	_allowVideoSkip = ConfMan.getBool("skip_support");
 
 	if (isTrueColor()) {
