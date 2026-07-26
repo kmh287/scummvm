@@ -68,11 +68,20 @@ void BuriedOptionsWidget::defineLayout(GUI::ThemeEval &layouts, const Common::St
 	layouts.closeDialog();
 }
 
-void BuriedOptionsWidget::load() {
-	int fontSize = kDefaultSubtitleFontSize; // from subtitle_manager.h
-	if (ConfMan.hasKey("subtitle_font_size", _domain))
-		fontSize = ConfMan.getInt("subtitle_font_size", _domain);
+// Reads the subtitle font size setting from the active ScummVM configuration domain ("subtitle_font_size").
+static int getSavedSubtitleFontSize(const Common::String &domain) {
+	if (ConfMan.hasKey("subtitle_font_size", domain))
+		return ConfMan.getInt("subtitle_font_size", domain);
+	return kDefaultSubtitleFontSize;
+}
 
+// Writes the subtitle font size setting to the active ScummVM configuration domain ("subtitle_font_size").
+static void saveSubtitleFontSize(const Common::String &domain, int fontSize) {
+	ConfMan.setInt("subtitle_font_size", fontSize, domain);
+}
+
+void BuriedOptionsWidget::load() {
+	int fontSize = getSavedSubtitleFontSize(_domain);
 	_fontSizePopUp->setSelectedTag(fontSize);
 
 	// If the saved value doesn't match any preset, fall back to Medium
@@ -85,7 +94,7 @@ bool BuriedOptionsWidget::save() {
 	if (selectedTag == (uint32)-1)
 		selectedTag = kDefaultSubtitleFontSize;
 
-	ConfMan.setInt("subtitle_font_size", (int)selectedTag, _domain);
+	saveSubtitleFontSize(_domain, (int)selectedTag);
 	return true;
 }
 

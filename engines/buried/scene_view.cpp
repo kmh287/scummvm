@@ -61,6 +61,7 @@ SceneViewWindow::SceneViewWindow(BuriedEngine *vm, Window *parent) : Window(vm, 
 	_asyncMovieStartFrame = 0;
 	_loopAsyncMovie = false;
 	_lastAIVoicePlaying = false;
+	_lastSyncSoundPlaying = false;
 	_paused = false;
 	_cycleEnabled = ((FrameWindow *)(_parent->getParent()))->isFrameCyclingDefault();
 	_forceCycleEnabled = false;
@@ -2399,12 +2400,11 @@ void SceneViewWindow::onPaint() {
 		if (_useScenePaint)
 			_currentScene->gdiPaint(this);
 
-		if (_vm->_subtitles && _vm->_sound->isAIVoicePlaying()) {
-			Common::String mediaId = _vm->_sound->getAIVoiceMediaId();
-			uint32 currentMs = _vm->_sound->getAIVoicePosition();
-			const SubtitleEntry *sub = _vm->_subtitles->getSubtitleForTime(mediaId, currentMs);
-			if (sub) {
-				_vm->_subtitles->renderSubtitle(_vm->_gfx->getScreen(), *sub);
+		if (_vm->_subtitles) {
+			if (_vm->_sound->isAIVoicePlaying()) {
+				_vm->_subtitles->renderSubtitleForMedia(_vm->_gfx->getScreen(), _vm->_sound->getAIVoiceMediaId(), _vm->_sound->getAIVoicePosition());
+			} else if (_vm->_sound->isSyncSoundPlaying()) {
+				_vm->_subtitles->renderSubtitleForMedia(_vm->_gfx->getScreen(), _vm->_sound->getSyncSoundMediaId(), _vm->_sound->getSyncSoundPosition());
 			}
 		}
 	}
@@ -2436,9 +2436,11 @@ void SceneViewWindow::onTimer(uint timer) {
 		_currentScene->timerCallback(this);
 
 	bool aiVoicePlaying = sound->isAIVoicePlaying();
-	if (_vm->_subtitles && (aiVoicePlaying || _lastAIVoicePlaying)) {
+	bool syncSoundPlaying = sound->isSyncSoundPlaying();
+	if (_vm->_subtitles && (aiVoicePlaying || _lastAIVoicePlaying || syncSoundPlaying || _lastSyncSoundPlaying)) {
 		invalidateWindow(false);
 		_lastAIVoicePlaying = aiVoicePlaying;
+		_lastSyncSoundPlaying = syncSoundPlaying;
 	}
 
 	sound->timerCallback();

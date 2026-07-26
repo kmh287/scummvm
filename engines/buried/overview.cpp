@@ -107,11 +107,7 @@ void OverviewWindow::onPaint() {
 	}
 
 	if (!mediaId.empty() && _vm->_subtitles && _vm->_sound->isInterfaceSoundPlaying()) {
-		uint32 currentMs = _vm->_sound->getInterfaceSoundPosition();
-		const SubtitleEntry *sub = _vm->_subtitles->getSubtitleForTime(mediaId, currentMs);
-		if (sub) {
-			_vm->_subtitles->renderSubtitle(_vm->_gfx->getScreen(), *sub);
-		}
+		_vm->_subtitles->renderSubtitleForMedia(_vm->_gfx->getScreen(), mediaId, _vm->_sound->getInterfaceSoundPosition());
 	}
 }
 

@@ -193,6 +193,7 @@ private:
 	int _asyncMovieFrameCount;
 	bool _loopAsyncMovie;
 	bool _lastAIVoicePlaying;
+	bool _lastSyncSoundPlaying;
 
 	Common::Path _lastAICommentFileName;
 

@@ -63,11 +63,14 @@ public:
 	SubtitleManager(BuriedEngine *vm);
 	~SubtitleManager();
 
-	bool loadSubtitles(const Common::String &mediaId);
+	bool loadSubtitlesDat();
 	const SubtitleEntry *getSubtitleForTime(const Common::String &mediaId, uint32 currentMs);
 
 	void renderSubtitle(Graphics::Surface *destSurface, const SubtitleEntry &entry);
 	void renderSubtitle(Graphics::Surface *destSurface, const Common::Rect &boxRect, const SubtitleEntry &entry);
+
+	bool renderSubtitleForMedia(Graphics::Surface *destSurface, const Common::String &mediaId, uint32 currentMs);
+	bool renderSubtitleForMedia(Graphics::Surface *destSurface, const Common::Rect &boxRect, const Common::String &mediaId, uint32 currentMs);
 	
 	int getFontHeight();
 
@@ -78,9 +81,8 @@ private:
 	Graphics::Font *_fontBold;
 	int _fontSize;
 
-	Common::String getSubtitlePath(const Common::String &mediaId) const;
 	void updateFont();
-	mutable Common::String _lastLoggedText;
+	Common::Array<Common::String> wrapText(const Common::String &text, int line1AvailW, int line2AvailW);
 };
 
 } // End of namespace Buried

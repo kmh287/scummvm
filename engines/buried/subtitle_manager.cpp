@@ -25,7 +25,7 @@
 
 #include "common/config-manager.h"
 #include "common/file.h"
-#include "common/formats/json.h"
+#include "common/textconsole.h"
 #include "graphics/font.h"
 #include "graphics/surface.h"
 
@@ -33,6 +33,7 @@ namespace Buried {
 
 SubtitleManager::SubtitleManager(BuriedEngine *vm) : _vm(vm), _font(nullptr), _fontBold(nullptr), _fontSize(0) {
 	updateFont();
+	loadSubtitlesDat();
 }
 
 SubtitleManager::~SubtitleManager() {
@@ -61,117 +62,94 @@ void SubtitleManager::updateFont() {
 	}
 }
 
-Common::String SubtitleManager::getSubtitlePath(const Common::String &mediaId) const {
-	Common::String cleanId = mediaId;
-	if (cleanId.contains(".")) {
-		size_t dotPos = cleanId.findLastOf('.');
-		cleanId = cleanId.substr(0, dotPos);
-	}
-	return "subtitles/" + cleanId + ".json";
+static inline byte blendColorComponent(byte srcComp, byte targetComp, float alpha, float invAlpha) {
+	return (byte)(srcComp * invAlpha + targetComp * alpha);
 }
 
-bool SubtitleManager::loadSubtitles(const Common::String &mediaId) {
-	Common::String cleanId = mediaId;
-	if (cleanId.contains(".")) {
-		size_t dotPos = cleanId.findLastOf('.');
-		cleanId = cleanId.substr(0, dotPos);
-	}
-	cleanId.toUppercase();
-
-	if (_loadedTracks.contains(cleanId))
-		return true;
-
-	Common::String jsonPath = getSubtitlePath(cleanId);
+bool SubtitleManager::loadSubtitlesDat() {
 	Common::File file;
-	if (!file.open(Common::Path(jsonPath))) {
-		// Also try without folder prefix or lowercase
-		if (!file.open(Common::Path(cleanId + ".json"))) {
-			// Cache as an empty track so we don't check disk again
-			SubtitleTrack emptyTrack;
-			emptyTrack.mediaId = cleanId;
-			_loadedTracks[cleanId] = emptyTrack;
-			return true;
+	if (!file.open(Common::Path("buried_subtitles.dat"))) {
+		warning("[SubtitleManager] Could not open buried_subtitles.dat");
+		return false;
+	}
+
+	uint32 magic = file.readUint32BE();
+	if (magic != MKTAG('B', 'U', 'R', 'S')) {
+		warning("[SubtitleManager] Invalid magic in subtitles.dat: 0x%08X", magic);
+		return false;
+	}
+
+	uint16 version = file.readUint16BE();
+	if (version != 1) {
+		warning("[SubtitleManager] Unsupported subtitles.dat version: %d", version);
+		return false;
+	}
+
+	uint16 numTracks = file.readUint16BE();
+
+	struct TocEntry {
+		Common::String mediaId;
+		uint32 offset;
+		uint16 cardCount;
+	};
+
+	Common::Array<TocEntry> toc;
+	toc.reserve(numTracks);
+
+	for (uint16 i = 0; i < numTracks; ++i) {
+		char mediaIdBuf[17];
+		file.read(mediaIdBuf, 16);
+		mediaIdBuf[16] = '\0';
+
+		TocEntry entry;
+		entry.mediaId = mediaIdBuf;
+		entry.offset = file.readUint32BE();
+		entry.cardCount = file.readUint16BE();
+		toc.push_back(entry);
+	}
+
+	// Load track payload data
+	for (const auto &tocEntry : toc) {
+		if (file.seek(tocEntry.offset, SEEK_SET)) {
+			SubtitleTrack track;
+			track.mediaId = tocEntry.mediaId;
+
+			for (uint16 c = 0; c < tocEntry.cardCount; ++c) {
+				SubtitleEntry card;
+				card.startMs = file.readUint32BE();
+				card.endMs = file.readUint32BE();
+
+				uint16 spkLen = file.readUint16BE();
+				if (spkLen > 0)
+					card.speaker = file.readString(0, spkLen);
+
+				uint16 txtLen = file.readUint16BE();
+				if (txtLen > 0)
+					card.text = file.readString(0, txtLen);
+
+				track.entries.push_back(card);
+			}
+
+			_loadedTracks[track.mediaId] = track;
 		}
 	}
 
-	uint32 size = file.size();
-	if (size == 0) {
-		SubtitleTrack emptyTrack;
-		emptyTrack.mediaId = cleanId;
-		_loadedTracks[cleanId] = emptyTrack;
-		return true;
-	}
-
-	char *buffer = new char[size + 1];
-	file.read(buffer, size);
-	buffer[size] = '\0';
-
-	Common::JSONValue *root = Common::JSON::parse(buffer);
-	delete[] buffer;
-
-	if (!root || !root->isObject()) {
-		warning("[SubtitleManager] Failed to parse JSON object in subtitle file for media ID: %s", cleanId.c_str());
-		delete root;
-		// Cache as empty to prevent infinite parse retries
-		SubtitleTrack emptyTrack;
-		emptyTrack.mediaId = cleanId;
-		_loadedTracks[cleanId] = emptyTrack;
-		return true;
-	}
-
-	SubtitleTrack track;
-	track.mediaId = cleanId;
-
-	Common::JSONValue *subsValue = root->child("subtitles");
-	if (subsValue && subsValue->isArray()) {
-		const Common::JSONArray &array = subsValue->asArray();
-		for (size_t i = 0; i < array.size(); ++i) {
-			Common::JSONValue *item = array[i];
-			if (!item || !item->isObject())
-				continue;
-
-			SubtitleEntry entry;
-			if (item->hasChild("start_ms"))
-				entry.startMs = (uint32)item->child("start_ms")->asIntegerNumber();
-			else
-				entry.startMs = 0;
-
-			if (item->hasChild("end_ms"))
-				entry.endMs = (uint32)item->child("end_ms")->asIntegerNumber();
-			else
-				entry.endMs = 0;
-
-			if (item->hasChild("speaker"))
-				entry.speaker = item->child("speaker")->asString();
-
-			if (item->hasChild("text"))
-				entry.text = item->child("text")->asString();
-
-			track.entries.push_back(entry);
-		}
-	}
-
-	delete root;
-
-	debug(5, "[SubtitleManager] SUCCESS: Loaded subtitle file for '%s' (%u entries)", cleanId.c_str(), (uint)track.entries.size());
-	_loadedTracks[cleanId] = track;
+	debug(1, "[SubtitleManager] Successfully loaded %u subtitle tracks from subtitles.dat", (uint)_loadedTracks.size());
 	return true;
 }
 
 const SubtitleEntry *SubtitleManager::getSubtitleForTime(const Common::String &mediaId, uint32 currentMs) {
-	Common::String cleanId = mediaId;
-	if (cleanId.contains(".")) {
-		size_t dotPos = cleanId.findLastOf('.');
-		cleanId = cleanId.substr(0, dotPos);
+	Common::String sanitizedMediaId = mediaId;
+	if (sanitizedMediaId.contains(".")) {
+		size_t dotPos = sanitizedMediaId.findLastOf('.');
+		sanitizedMediaId = sanitizedMediaId.substr(0, dotPos);
 	}
-	cleanId.toUppercase();
+	sanitizedMediaId.toUppercase();
 
-	if (!_loadedTracks.contains(cleanId)) {
-		if (!loadSubtitles(cleanId))
-			return nullptr;
-	}
+	if (!_loadedTracks.contains(sanitizedMediaId))
+		return nullptr;
 
-	const SubtitleTrack &track = _loadedTracks[cleanId];
+	const SubtitleTrack &track = _loadedTracks[sanitizedMediaId];
 	for (size_t i = 0; i < track.entries.size(); ++i) {
 		const SubtitleEntry &entry = track.entries[i];
 		if (currentMs >= entry.startMs && currentMs <= entry.endMs) {
@@ -180,6 +158,22 @@ const SubtitleEntry *SubtitleManager::getSubtitleForTime(const Common::String &m
 	}
 
 	return nullptr;
+}
+
+bool SubtitleManager::renderSubtitleForMedia(Graphics::Surface *destSurface, const Common::String &mediaId, uint32 currentMs) {
+	const SubtitleEntry *sub = getSubtitleForTime(mediaId, currentMs);
+	if (!sub)
+		return false;
+	renderSubtitle(destSurface, *sub);
+	return true;
+}
+
+bool SubtitleManager::renderSubtitleForMedia(Graphics::Surface *destSurface, const Common::Rect &boxRect, const Common::String &mediaId, uint32 currentMs) {
+	const SubtitleEntry *sub = getSubtitleForTime(mediaId, currentMs);
+	if (!sub)
+		return false;
+	renderSubtitle(destSurface, boxRect, *sub);
+	return true;
 }
 
 void SubtitleManager::renderSubtitle(Graphics::Surface *destSurface, const SubtitleEntry &entry) {
@@ -195,11 +189,6 @@ void SubtitleManager::renderSubtitle(Graphics::Surface *destSurface, const Commo
 	if (!destSurface || !_font || entry.text.empty())
 		return;
 
-	if (_lastLoggedText != entry.text) {
-		_lastLoggedText = entry.text;
-		warning("[Subtitle Text] %s: %s", entry.speaker.empty() ? "Dialogue" : entry.speaker.c_str(), entry.text.c_str());
-	}
-
 	if (boxRect.width() <= 20 || boxRect.height() <= 10)
 		return;
 
@@ -209,7 +198,6 @@ void SubtitleManager::renderSubtitle(Graphics::Surface *destSurface, const Commo
 	float alpha = kSubtitleBoxOpacity;
 	if (alpha < 0.0f) alpha = 0.0f;
 	if (alpha > 1.0f) alpha = 1.0f;
-	float invAlpha = 1.0f - alpha;
 
 	byte targetR = 38;
 	byte targetG = 12;
@@ -219,16 +207,40 @@ void SubtitleManager::renderSubtitle(Graphics::Surface *destSurface, const Commo
 	// Glowing orange/copper border color matching HUD
 	uint32 borderColor = _vm->_gfx->getColor(237, 109, 66);
 
-	// Draw scrim background box and 1-pixel top border
+	// -----------------------------------------------------------------------
+	// Render subtitle box scrim & top chamfered border.
+	//
+	// 1. Chamfer Cutouts: For the top 6 rows (dy < 6), inset the left and right
+	//    bounds by (6 - dy) * 2 pixels. This creates a 30-degree bevel angle
+	//    (2:1 horizontal-to-vertical slope ratio) matching the suit HUD.
+	// 2. CRT Scanline Interlacing: Alternate row opacity (1.15x alpha on even rows,
+	//    0.85x alpha on odd rows) to simulate an interlaced glass CRT monitor.
+	// -----------------------------------------------------------------------
 	for (int y = boxRect.top; y < boxRect.bottom; ++y) {
 		if (y < 0 || y >= destSurface->h) continue;
-		
-		bool isBorderLine = (y == boxRect.top);
 
-		for (int x = boxRect.left; x < boxRect.right; ++x) {
+		int dy = y - boxRect.top;
+		int inset = 0;
+		if (dy < 6) {
+			inset = (6 - dy) * 2; // 30-degree chamfer slope (2:1 horizontal-to-vertical ratio)
+		}
+
+		int startX = boxRect.left + inset;
+		int endX   = boxRect.right - inset;
+
+		// CRT Scanline Raster: alternate line alpha for subtle interlaced CRT glass effect
+		float curAlpha = (dy % 2 == 0) ? (alpha * 1.15f) : (alpha * 0.85f);
+		if (curAlpha > 0.95f) curAlpha = 0.95f;
+		if (curAlpha < 0.20f) curAlpha = 0.20f;
+		float curInvAlpha = 1.0f - curAlpha;
+
+		for (int x = startX; x < endX; ++x) {
 			if (x < 0 || x >= destSurface->w) continue;
-			
-			if (isBorderLine) {
+
+			// Border pixels: top horizontal line + diagonal 30-degree chamfer edges
+			bool isBorderPixel = (dy == 0) || (dy < 6 && (x == startX || x == endX - 1));
+
+			if (isBorderPixel) {
 				if (destSurface->format.bytesPerPixel == 2) {
 					uint16 *ptr = (uint16 *)destSurface->getBasePtr(x, y);
 					*ptr = (uint16)borderColor;
@@ -244,17 +256,17 @@ void SubtitleManager::renderSubtitle(Graphics::Surface *destSurface, const Commo
 					uint16 *ptr = (uint16 *)destSurface->getBasePtr(x, y);
 					byte r, g, b;
 					destSurface->format.colorToRGB(*ptr, r, g, b);
-					byte blendedR = (byte)(r * invAlpha + targetR * alpha);
-					byte blendedG = (byte)(g * invAlpha + targetG * alpha);
-					byte blendedB = (byte)(b * invAlpha + targetB * alpha);
+					byte blendedR = blendColorComponent(r, targetR, curAlpha, curInvAlpha);
+					byte blendedG = blendColorComponent(g, targetG, curAlpha, curInvAlpha);
+					byte blendedB = blendColorComponent(b, targetB, curAlpha, curInvAlpha);
 					*ptr = destSurface->format.RGBToColor(blendedR, blendedG, blendedB);
 				} else if (destSurface->format.bytesPerPixel == 4) {
 					uint32 *ptr = (uint32 *)destSurface->getBasePtr(x, y);
 					byte r, g, b;
 					destSurface->format.colorToRGB(*ptr, r, g, b);
-					byte blendedR = (byte)(r * invAlpha + targetR * alpha);
-					byte blendedG = (byte)(g * invAlpha + targetG * alpha);
-					byte blendedB = (byte)(b * invAlpha + targetB * alpha);
+					byte blendedR = blendColorComponent(r, targetR, curAlpha, curInvAlpha);
+					byte blendedG = blendColorComponent(g, targetG, curAlpha, curInvAlpha);
+					byte blendedB = blendColorComponent(b, targetB, curAlpha, curInvAlpha);
 					*ptr = destSurface->format.RGBToColor(blendedR, blendedG, blendedB);
 				} else {
 					byte *ptr = (byte *)destSurface->getBasePtr(x, y);
@@ -278,80 +290,70 @@ void SubtitleManager::renderSubtitle(Graphics::Surface *destSurface, const Commo
 	Common::String speakerPrefix = entry.speaker.empty() ? "" : (entry.speaker + ": ");
 	int speakerW = speakerPrefix.empty() ? 0 : _fontBold->getStringWidth(speakerPrefix);
 
-	// -----------------------------------------------------------------------
-	// Word-wrap the dialogue text across up to 2 lines.
-	// Line 1 has a narrower available width because the speaker prefix
-	// occupies the left side of it.
-	// -----------------------------------------------------------------------
-	Common::Array<Common::String> lines;
+	// Word-wrap text across up to 2 lines
+	int line1AvailW = innerW - speakerW;
+	Common::Array<Common::String> lines = wrapText(entry.text, line1AvailW, innerW);
 
-	Common::String remaining = entry.text;
-	bool firstLine = true;
-
-	while (!remaining.empty() && lines.size() < 2) {
-		int availW = firstLine ? (innerW - speakerW) : innerW;
-		if (availW <= 0) {
-			// Speaker prefix alone fills the row; push text to next line.
-			firstLine = false;
-			availW = innerW;
-		}
-
-		// Find the maximum prefix of 'remaining' that fits in availW.
-		// We scan word by word and commit the longest fitting run.
-		Common::String fittingLine;
-		Common::String rest = remaining;
-
-		while (!rest.empty()) {
-			// Pull the next word (up to the next space or end of string)
-			uint nextSpace = 0;
-			while (nextSpace < rest.size() && rest[nextSpace] != ' ')
-				++nextSpace;
-			Common::String word = rest.substr(0, nextSpace);
-
-			// Candidate: what would the line look like if we add this word?
-			Common::String candidate = fittingLine.empty() ? word : (fittingLine + " " + word);
-
-			if (_font->getStringWidth(candidate) <= availW) {
-				fittingLine = candidate;
-				rest = (nextSpace < rest.size()) ? rest.substr(nextSpace + 1) : "";
-			} else {
-				// Word doesn't fit.
-				if (fittingLine.empty()) {
-					// Single word is already too long — force it onto the line anyway.
-					fittingLine = word;
-					rest = (nextSpace < rest.size()) ? rest.substr(nextSpace + 1) : "";
-				}
-				break;
-			}
-			}
-
-
-		lines.push_back(fittingLine);
-		remaining = rest;
-		firstLine = false;
-	}
-
-	// -----------------------------------------------------------------------
 	// Draw line 1: speaker prefix (bold orange) + first line of dialogue (cream-amber)
-	// -----------------------------------------------------------------------
 	if (!lines.empty()) {
 		int drawX = innerX;
 		if (!speakerPrefix.empty()) {
 			_fontBold->drawString(destSurface, speakerPrefix, drawX, curY, innerW, orangeColor, Graphics::kTextAlignLeft);
 			drawX += speakerW;
 		}
-		int line1AvailW = boxRect.right - kPadX - drawX;
-		if (line1AvailW > 0)
-			_font->drawString(destSurface, lines[0], drawX, curY, line1AvailW, dialogueColor, Graphics::kTextAlignLeft);
+		int line1AvailWActual = boxRect.right - kPadX - drawX;
+		if (line1AvailWActual > 0)
+			_font->drawString(destSurface, lines[0], drawX, curY, line1AvailWActual, dialogueColor, Graphics::kTextAlignLeft);
 		curY += fontHeight;
 	}
 
-	// -----------------------------------------------------------------------
-	// Draw line 2 (if present): dialogue continues (cream-amber), no speaker prefix
-	// -----------------------------------------------------------------------
+	// Draw line 2 (if present): dialogue continues (cream-amber)
 	if (lines.size() >= 2 && curY + fontHeight <= boxRect.bottom) {
 		_font->drawString(destSurface, lines[1], innerX, curY, innerW, dialogueColor, Graphics::kTextAlignLeft);
 	}
+}
+
+Common::Array<Common::String> SubtitleManager::wrapText(const Common::String &text, int line1AvailW, int line2AvailW) {
+	Common::Array<Common::String> lines;
+	Common::String remaining = text;
+	bool firstLine = true;
+
+	while (!remaining.empty() && lines.size() < 2) {
+		int availW = firstLine ? line1AvailW : line2AvailW;
+		if (availW <= 0) {
+			firstLine = false;
+			availW = line2AvailW;
+		}
+
+		Common::String fittingLine;
+		Common::String rest = remaining;
+
+		while (!rest.empty()) {
+			uint nextSpace = 0;
+			while (nextSpace < rest.size() && rest[nextSpace] != ' ')
+				++nextSpace;
+			Common::String word = rest.substr(0, nextSpace);
+
+			Common::String candidate = fittingLine.empty() ? word : (fittingLine + " " + word);
+
+			if (_font->getStringWidth(candidate) <= availW) {
+				fittingLine = candidate;
+				rest = (nextSpace < rest.size()) ? rest.substr(nextSpace + 1) : "";
+			} else {
+				if (fittingLine.empty()) {
+					fittingLine = word;
+					rest = (nextSpace < rest.size()) ? rest.substr(nextSpace + 1) : "";
+				}
+				break;
+			}
+		}
+
+		lines.push_back(fittingLine);
+		remaining = rest;
+		firstLine = false;
+	}
+
+	return lines;
 }
 
 int SubtitleManager::getFontHeight() {

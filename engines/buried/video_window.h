@@ -81,6 +81,8 @@ private:
 	bool _needsPalConversion;
 	Common::Rect _srcRect, _dstRect;
 	Common::String _mediaId;
+	bool _lastSubtitledPlaying;
+	Common::Rect calculateSubtitleBounds(int boxHeight) const;
 };
 
 } // End of namespace Buried

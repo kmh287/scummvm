@@ -32,7 +32,7 @@
 
 namespace Buried {
 
-VideoWindow::VideoWindow(BuriedEngine *vm, Window *parent) : Window(vm, parent), _video(nullptr), _mode(kModeClosed), _lastFrame(nullptr) {
+VideoWindow::VideoWindow(BuriedEngine *vm, Window *parent) : Window(vm, parent), _video(nullptr), _mode(kModeClosed), _lastFrame(nullptr), _lastSubtitledPlaying(false) {
 	_vm->addVideo(this);
 	_needsPalConversion = false;
 	_ownedFrame = nullptr;
@@ -200,36 +200,39 @@ void VideoWindow::onPaint() {
 		else
 			_vm->_gfx->crossBlit(_vm->_gfx->getScreen(), absoluteRect.left + _dstRect.left, absoluteRect.top + _dstRect.top, _dstRect.width(), _dstRect.height(), _lastFrame, _srcRect.left, _srcRect.top);
 
-		if (_video && _video->isPlaying() && _vm->_subtitles && !_mediaId.empty()) {
-			uint32 currentMs = _video->getTime();
-			const SubtitleEntry *sub = _vm->_subtitles->getSubtitleForTime(_mediaId, currentMs);
-			if (sub) {
-				Common::Rect videoFrameRect;
-				if (_srcRect.isEmpty() && _dstRect.isEmpty()) {
-					videoFrameRect = absoluteRect;
-				} else {
-					videoFrameRect = Common::Rect(
-						absoluteRect.left + _dstRect.left,
-						absoluteRect.top + _dstRect.top,
-						absoluteRect.left + _dstRect.right,
-						absoluteRect.top + _dstRect.bottom
-					);
-				}
-
-				int fontHeight = _vm->_subtitles->getFontHeight();
-				int boxHeight = (fontHeight * 2) + 8;
-
-				Common::Rect videoSubBox(
-					videoFrameRect.left,
-					videoFrameRect.bottom - boxHeight,
-					videoFrameRect.right,
-					videoFrameRect.bottom
-				);
-
-				_vm->_subtitles->renderSubtitle(_vm->_gfx->getScreen(), videoSubBox, *sub);
-			}
+		bool isPlayingNow = (_video && _video->isPlaying() && !_mediaId.empty());
+		if (isPlayingNow && _vm->_subtitles) {
+			int fontHeight = _vm->_subtitles->getFontHeight();
+			int boxHeight = (fontHeight * 2) + 8;
+			Common::Rect videoSubBox = calculateSubtitleBounds(boxHeight);
+			_vm->_subtitles->renderSubtitleForMedia(_vm->_gfx->getScreen(), videoSubBox, _mediaId, _video->getTime());
+		} else if (_lastSubtitledPlaying && !isPlayingNow) {
+			if (getParent())
+				getParent()->invalidateWindow(false);
 		}
+		_lastSubtitledPlaying = isPlayingNow;
 	}
+}
+
+Common::Rect VideoWindow::calculateSubtitleBounds(int boxHeight) const {
+	Common::Rect absoluteRect = getAbsoluteRect();
+	Common::Rect videoFrameRect;
+	if (_srcRect.isEmpty() && _dstRect.isEmpty()) {
+		videoFrameRect = absoluteRect;
+	} else {
+		videoFrameRect = Common::Rect(
+			absoluteRect.left + _dstRect.left,
+			absoluteRect.top + _dstRect.top,
+			absoluteRect.left + _dstRect.right,
+			absoluteRect.top + _dstRect.bottom
+		);
+	}
+	return Common::Rect(
+		videoFrameRect.left,
+		videoFrameRect.bottom - boxHeight,
+		videoFrameRect.right,
+		videoFrameRect.bottom
+	);
 }
 
 void VideoWindow::onActionEnd(const Common::CustomEventType &action, uint flags) {

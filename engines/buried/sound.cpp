@@ -33,6 +33,8 @@
 #include "buried/graphics.h"
 #include "buried/resources.h"
 #include "buried/sound.h"
+#include "buried/subtitle_manager.h"
+#include "buried/window.h"
 
 namespace Buried {
 
@@ -456,17 +458,34 @@ int SoundManager::playSoundEffect(const Common::Path &fileName, int volume, bool
 	return effectChannel;
 }
 
+uint32 SoundManager::getSyncSoundPosition() const {
+	if (_syncSoundMediaId.empty()) return 0;
+	return g_system->getMillis() - _syncSoundStartTime;
+}
+
 bool SoundManager::playSynchronousSoundEffect(const Common::Path &fileName, int volume) {
 	// Reset the cursor
 	Cursor oldCursor = _vm->_gfx->setCursor(kCursorWait);
 	g_system->updateScreen();
 
+	// Store media ID for subtitle lookup
+	Common::String lastComp = fileName.getLastComponent().toString();
+	if (lastComp.contains(".")) {
+		size_t dotPos = lastComp.findLastOf('.');
+		lastComp = lastComp.substr(0, dotPos);
+	}
+	lastComp.toUppercase();
+	_syncSoundMediaId = lastComp;
+	_syncSoundStartTime = g_system->getMillis();
+
 	// Attempt to start the sound playing using the standard sound effect playback function
 	int soundChannel = playSoundEffect(fileName, volume, false, true);
 
 	// If the sound channel passed to us was invalid, return false right now
-	if (soundChannel < 0)
+	if (soundChannel < 0) {
+		_syncSoundMediaId.clear();
 		return false;
+	}
 
 	_vm->enableCutsceneKeymap(true);
 
@@ -479,6 +498,12 @@ bool SoundManager::playSynchronousSoundEffect(const Common::Path &fileName, int 
 
 	// One last callback check
 	timerCallback();
+
+	_syncSoundMediaId.clear();
+
+	// Clear subtitle overlay when playback finishes
+	if (_vm->_mainWindow)
+		_vm->_mainWindow->invalidateWindow(false);
 
 	_vm->enableCutsceneKeymap(false);
 

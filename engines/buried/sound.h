@@ -95,6 +95,10 @@ public:
 	// TIMER CALLBACK FUNCTION
 	void timerCallback();
 
+	bool isSyncSoundPlaying() const { return !_syncSoundMediaId.empty(); }
+	Common::String getSyncSoundMediaId() const { return _syncSoundMediaId; }
+	uint32 getSyncSoundPosition() const;
+
 private:
 	enum {
 		kAmbientIndexBase = 0,
@@ -155,6 +159,8 @@ private:
 	Common::Path _interfaceFileName;
 	Common::Path _arthurFileName;
 	Common::String _currentAIVoiceMediaId;
+	Common::String _syncSoundMediaId;
+	uint32 _syncSoundStartTime;
 };
 
 } // End of namespace Buried
