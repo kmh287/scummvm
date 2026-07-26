@@ -338,7 +338,7 @@ void SubtitleManager::renderSubtitle(Graphics::Surface *destSurface, const Commo
 	uint32 dialogueColor = _vm->_gfx->getColor(255, 230, 180);
 
 	const int kPadX = 8;  // horizontal inner padding
-	const int kPadY = 2;  // balanced visual top & bottom vertical inner padding
+	const int kPadY = kSubtitlePadY;  // vertical inner padding
 	const int innerW  = boxRect.width() - kPadX * 2;
 	const int innerX  = boxRect.left + kPadX;
 	int curY = boxRect.top + kPadY;
@@ -421,7 +421,7 @@ int SubtitleManager::getFontHeight() {
 }
 
 int SubtitleManager::getBoxHeight() {
-	return (getFontHeight() * 2) + 14;
+	return (getFontHeight() * 2) + (kSubtitlePadY * 2) + 10;
 }
 
 Common::Rect SubtitleManager::getDefaultBoxBounds() {
