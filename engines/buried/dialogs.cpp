@@ -21,7 +21,6 @@
 
 #include "common/config-manager.h"
 #include "common/translation.h"
-
 #include "gui/ThemeEval.h"
 #include "gui/widget.h"
 #include "gui/widgets/popup.h"
@@ -31,12 +30,14 @@
 
 namespace Buried {
 
+static const char *const kSubtitleFontSizeKey = "subtitle_font_size";
+
 // Font size preset values (pixel height)
 enum {
-	kFontSizeSmall   = 12,
-	kFontSizeMedium  = 14,
-	kFontSizeLarge   = 18,
-	kFontSizeXLarge  = 22
+	kFontSizeSmall = 12,
+	kFontSizeMedium = 14,
+	kFontSizeLarge = 18,
+	kFontSizeXLarge = 22
 };
 
 BuriedOptionsWidget::BuriedOptionsWidget(GUI::GuiObject *boss, const Common::String &name, const Common::String &domain)
@@ -48,36 +49,40 @@ BuriedOptionsWidget::BuriedOptionsWidget(GUI::GuiObject *boss, const Common::Str
 
 	// Dropdown populated with named presets
 	_fontSizePopUp = new GUI::PopUpWidget(widgetsBoss(), "BuriedGameOptionsDialog.FontSize");
-	_fontSizePopUp->appendEntry(_("Small"),         kFontSizeSmall);
-	_fontSizePopUp->appendEntry(_("Medium"),        kFontSizeMedium);
-	_fontSizePopUp->appendEntry(_("Large"),         kFontSizeLarge);
-	_fontSizePopUp->appendEntry(_("Extra Large"),   kFontSizeXLarge);
+	_fontSizePopUp->appendEntry(_("Small"), kFontSizeSmall);
+	_fontSizePopUp->appendEntry(_("Medium"), kFontSizeMedium);
+	_fontSizePopUp->appendEntry(_("Large"), kFontSizeLarge);
+	_fontSizePopUp->appendEntry(_("Extra Large"), kFontSizeXLarge);
+}
+
+static void defineFontSizeRowLayout(GUI::ThemeEval &layouts) {
+	layouts.addLayout(GUI::ThemeLayout::kLayoutHorizontal).addPadding(0, 0, 2, 0);
+	layouts.addWidget(/* name= */ "FontSizeDesc", /* type= */ "OptionsLabel");
+	layouts.addWidget(/* name= */ "FontSize", /* type= */ "PopUp");
+	layouts.closeLayout();
 }
 
 void BuriedOptionsWidget::defineLayout(GUI::ThemeEval &layouts, const Common::String &layoutName, const Common::String &overlayedLayout) const {
 	layouts.addDialog(layoutName, overlayedLayout);
 	layouts.addLayout(GUI::ThemeLayout::kLayoutVertical).addPadding(0, 0, 0, 0);
 
-	// Single row: label + popup
-	layouts.addLayout(GUI::ThemeLayout::kLayoutHorizontal).addPadding(0, 0, 2, 0);
-	layouts.addWidget("FontSizeDesc", "OptionsLabel");
-	layouts.addWidget("FontSize", "PopUp");
-	layouts.closeLayout(); // close horizontal row
+	defineFontSizeRowLayout(layouts);
 
-	layouts.closeLayout(); // close vertical
+	layouts.closeLayout();
 	layouts.closeDialog();
 }
 
 // Reads the subtitle font size setting from the active ScummVM configuration domain ("subtitle_font_size").
 static int getSavedSubtitleFontSize(const Common::String &domain) {
-	if (ConfMan.hasKey("subtitle_font_size", domain))
-		return ConfMan.getInt("subtitle_font_size", domain);
+	if (ConfMan.hasKey(kSubtitleFontSizeKey, domain)) {
+		return ConfMan.getInt(kSubtitleFontSizeKey, domain);
+	}
 	return kDefaultSubtitleFontSize;
 }
 
 // Writes the subtitle font size setting to the active ScummVM configuration domain ("subtitle_font_size").
 static void saveSubtitleFontSize(const Common::String &domain, int fontSize) {
-	ConfMan.setInt("subtitle_font_size", fontSize, domain);
+	ConfMan.setInt(kSubtitleFontSizeKey, fontSize, domain);
 }
 
 void BuriedOptionsWidget::load() {
@@ -85,14 +90,16 @@ void BuriedOptionsWidget::load() {
 	_fontSizePopUp->setSelectedTag(fontSize);
 
 	// If the saved value doesn't match any preset, fall back to Medium
-	if (_fontSizePopUp->getSelectedTag() == (uint32)-1)
+	if ((int32)_fontSizePopUp->getSelectedTag() == -1) {
 		_fontSizePopUp->setSelectedTag(kFontSizeMedium);
+	}
 }
 
 bool BuriedOptionsWidget::save() {
 	uint32 selectedTag = _fontSizePopUp->getSelectedTag();
-	if (selectedTag == (uint32)-1)
+	if ((int32)selectedTag == -1) {
 		selectedTag = kDefaultSubtitleFontSize;
+	}
 
 	saveSubtitleFontSize(_domain, (int)selectedTag);
 	return true;

@@ -49,7 +49,7 @@ public:
 	bool save() override;
 
 private:
-	GUI::PopUpWidget      *_fontSizePopUp;
+	GUI::PopUpWidget *_fontSizePopUp;
 	GUI::StaticTextWidget *_fontSizeDesc;
 };
 

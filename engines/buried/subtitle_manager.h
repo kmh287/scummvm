@@ -53,9 +53,9 @@ struct SubtitleTrack {
 // Subtitle Box Layout Constants
 // Controls position, width, and height of the subtitle overlay box.
 // Extended horizontal placement spans across the suit viewport bezel lips (X=58..502, Top Y=317).
-static const int kSubtitleBoxX = 48;          // X position (expanded to cover left bezel lip)
+static const int kSubtitleBoxX = 46;          // X position (expanded to cover left bezel lip)
 static const int kSubtitleViewportTop = 319;  // Y position flush with bottom of viewport
-static const int kSubtitleBoxWidth = 460;     // Width of subtitle box (expanded to cover right bezel lip)
+static const int kSubtitleBoxWidth = 462;     // Width of subtitle box (expanded to cover right bezel lip)
 static const float kSubtitleBoxOpacity = 0.75f; // Opacity: 0.0f (fully transparent) to 1.0f (fully opaque)
 static const int kDefaultSubtitleFontSize = 14; // Default font pixel height
 
@@ -77,6 +77,9 @@ public:
 	bool renderSubtitleForMedia(Graphics::Surface *destSurface, const Common::Rect &boxRect, const Common::String &mediaId, uint32 currentMs);
 	
 	int getFontHeight();
+	int getBoxHeight();
+	Common::Rect getDefaultBoxBounds();
+	Common::Rect calculateBoxBoundsForVideo(const Common::Rect &videoFrameRect);
 
 private:
 	BuriedEngine *_vm;

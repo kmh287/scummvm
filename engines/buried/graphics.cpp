@@ -85,38 +85,24 @@ Graphics::Font *GraphicsManager::createArialFont(int size, bool bold) const {
 
 	Common::SeekableReadStream *stream = SearchMan.createReadStreamForMember(defaultBaseName);
 
-	// Map the heights needed to point sizes
-	if (bold) {
-		switch (size) {
-		case 12:
-		case 13:
-			size = 7;
-			break;
-		case 14:
-			size = 8;
-			break;
-		case 20:
-			size = 12; // Preserve original size 20 mapping for death/completion screens
-			break;
-		default:
-			size = (size * 8) / 14;
-			if (size < 6) size = 6;
-			break;
+	// Map requested pixel height to TTF point size
+	switch (size) {
+	case 12:
+	case 13:
+		size = 7;
+		break;
+	case 14:
+		size = 8;
+		break;
+	case 20:
+		size = 12; // Preserve original size 20 mapping for death/completion screens
+		break;
+	default:
+		size = (size * 8) / 14;
+		if (size < 6) {
+			size = 6;
 		}
-	} else {
-		switch (size) {
-		case 12:
-		case 13:
-			size = 7;
-			break;
-		case 14:
-			size = 8;
-			break;
-		default:
-			size = (size * 8) / 14;
-			if (size < 6) size = 6;
-			break;
-		}
+		break;
 	}
 
 	// TODO: Make the monochrome mode optional

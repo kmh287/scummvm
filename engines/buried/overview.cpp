@@ -97,6 +97,9 @@ void OverviewWindow::onPaint() {
 		}
 	}
 
+	// Map current tutorial step to corresponding interface audio clip (IO_AUD_1 .. IO_AUD_5).
+	// Note: OverviewWindow plays tutorial narration via playInterfaceSound() rather than AI voice
+	// comments or synchronous sound effects, so we explicitly render subtitles for interface audio here.
 	Common::String mediaId = "";
 	switch (_currentStatus) {
 	case 0: mediaId = "IO_AUD_1"; break;
@@ -106,7 +109,7 @@ void OverviewWindow::onPaint() {
 	case 4: mediaId = "IO_AUD_5"; break;
 	}
 
-	if (!mediaId.empty() && _vm->_subtitles && _vm->_subtitles->areSubtitlesEnabled() && _vm->_sound->isInterfaceSoundPlaying()) {
+	if (!mediaId.empty() && _vm->_subtitles->areSubtitlesEnabled() && _vm->_sound->isInterfaceSoundPlaying()) {
 		_vm->_subtitles->renderSubtitleForMedia(_vm->_gfx->getScreen(), mediaId, _vm->_sound->getInterfaceSoundPosition());
 	}
 }
@@ -132,10 +135,7 @@ void OverviewWindow::onTimer(uint timer) {
 	_vm->_sound->timerCallback();
 
 	if (_currentStatus >= 0 && _vm->_sound->isInterfaceSoundPlaying()) {
-		if (_vm->_subtitles && _vm->_subtitles->areSubtitlesEnabled()) {
-			invalidateWindow();
-			_vm->_gfx->updateScreen();
-		}
+		_vm->_subtitles->invalidateSubtitles(this);
 		return;
 	}
 

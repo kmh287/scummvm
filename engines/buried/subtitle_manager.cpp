@@ -47,32 +47,36 @@ bool SubtitleManager::areSubtitlesEnabled() const {
 }
 
 void SubtitleManager::invalidateSubtitles(Window *targetWindow) {
-	if (!areSubtitlesEnabled())
+	if (!areSubtitlesEnabled()) {
 		return;
+	}
 
+	// Invalidate target window (or main window) to trigger onPaint() repaints
 	if (targetWindow) {
 		targetWindow->invalidateWindow(false);
 	} else if (_vm->_mainWindow) {
 		_vm->_mainWindow->invalidateWindow(false);
 	}
 
-	int fontHeight = getFontHeight();
-	int calculatedBoxHeight = (fontHeight * 2) + 8;
-	Common::Rect boxRect(kSubtitleBoxX, kSubtitleViewportTop, kSubtitleBoxX + kSubtitleBoxWidth, kSubtitleViewportTop + calculatedBoxHeight);
-	_vm->_gfx->invalidateRect(boxRect, false);
+	// Mark the subtitle box region dirty on the GraphicsManager screen renderer.
+	// This is required because the subtitle overlay sits below the jumpsuit visor window bounds,
+	// so we explicitly add its screen bounding rect to the hardware dirty rect list for display blitting.
+	_vm->_gfx->invalidateRect(getDefaultBoxBounds(), false);
 }
 
 void SubtitleManager::updateFont() {
 	int requestedSize = kDefaultSubtitleFontSize;
 	if (ConfMan.hasKey("subtitle_font_size")) {
 		requestedSize = ConfMan.getInt("subtitle_font_size");
-	} else if (ConfMan.hasKey("talkspeed")) {
-		int talkspeed = ConfMan.getInt("talkspeed");
-		requestedSize = 12 + (talkspeed * 8 / 255); // Maps talkspeed 0..255 to font sizes 12px..20px
 	}
 
-	if (requestedSize < 10) requestedSize = 10;
-	if (requestedSize > 24) requestedSize = 24;
+	// Clamp font pixel height between 10px and 24px to ensure text remains legible while fitting inside the subtitle box
+	if (requestedSize < 10) {
+		requestedSize = 10;
+	}
+	if (requestedSize > 24) {
+		requestedSize = 24;
+	}
 
 	if (!_font || _fontSize != requestedSize) {
 		delete _font;
@@ -87,6 +91,38 @@ static inline byte blendColorComponent(byte srcComp, byte targetComp, float alph
 	return (byte)(srcComp * invAlpha + targetComp * alpha);
 }
 
+static inline void drawPixel(Graphics::Surface *destSurface, int x, int y, uint32 color) {
+	if (destSurface->format.bytesPerPixel == 2) {
+		uint16 *ptr = (uint16 *)destSurface->getBasePtr(x, y);
+		*ptr = (uint16)color;
+	} else if (destSurface->format.bytesPerPixel == 4) {
+		uint32 *ptr = (uint32 *)destSurface->getBasePtr(x, y);
+		*ptr = color;
+	} else {
+		byte *ptr = (byte *)destSurface->getBasePtr(x, y);
+		*ptr = (byte)color;
+	}
+}
+
+// ---------------------------------------------------------------------------
+// Loads binary subtitle package (buried_subtitles.dat).
+//
+// File Format Specification (Big-Endian):
+// 1. Magic Signature (4 bytes): 'BURS' (0x42555253)
+// 2. File Version (uint16): 1
+// 3. Track Count (uint16): N tracks
+// 4. TOC Table (N x 22 bytes):
+//    - Media ID (16 bytes): Fixed ASCII string (null-padded)
+//    - Payload Offset (uint32): Byte offset to track data
+//    - Card Count (uint16): M subtitle cards in track
+// 5. Track Payloads:
+//    - Start Time (uint32): Start time in milliseconds
+//    - End Time (uint32): End time in milliseconds
+//    - Speaker Length (uint16): Speaker string length
+//    - Speaker String: UTF-8 speaker name
+//    - Text Length (uint16): Dialogue string length
+//    - Text String: UTF-8 dialogue text
+// ---------------------------------------------------------------------------
 bool SubtitleManager::loadSubtitlesDat() {
 	Common::File file;
 	if (!file.open(Common::Path("buried_subtitles.dat"))) {
@@ -141,12 +177,14 @@ bool SubtitleManager::loadSubtitlesDat() {
 				card.endMs = file.readUint32BE();
 
 				uint16 spkLen = file.readUint16BE();
-				if (spkLen > 0)
+				if (spkLen > 0) {
 					card.speaker = file.readString(0, spkLen);
+				}
 
 				uint16 txtLen = file.readUint16BE();
-				if (txtLen > 0)
+				if (txtLen > 0) {
 					card.text = file.readString(0, txtLen);
+				}
 
 				track.entries.push_back(card);
 			}
@@ -159,18 +197,25 @@ bool SubtitleManager::loadSubtitlesDat() {
 	return true;
 }
 
-const SubtitleEntry *SubtitleManager::getSubtitleForTime(const Common::String &mediaId, uint32 currentMs) {
-	Common::String sanitizedMediaId = mediaId;
-	if (sanitizedMediaId.contains(".")) {
-		size_t dotPos = sanitizedMediaId.findLastOf('.');
-		sanitizedMediaId = sanitizedMediaId.substr(0, dotPos);
+static Common::String sanitizeMediaId(const Common::String &mediaId) {
+	Common::String sanitized = mediaId;
+	if (sanitized.contains(".")) {
+		size_t dotPos = sanitized.findLastOf('.');
+		sanitized = sanitized.substr(0, dotPos);
 	}
-	sanitizedMediaId.toUppercase();
+	sanitized.toUppercase();
+	return sanitized;
+}
 
-	if (!_loadedTracks.contains(sanitizedMediaId))
+const SubtitleEntry *SubtitleManager::getSubtitleForTime(const Common::String &mediaId, uint32 currentMs) {
+	Common::String sanitized = sanitizeMediaId(mediaId);
+
+	if (!_loadedTracks.contains(sanitized)) {
 		return nullptr;
+	}
 
-	const SubtitleTrack &track = _loadedTracks[sanitizedMediaId];
+	// Linear search is O(M) over a small array (each track contains at most <= 20 subtitle entries)
+	const SubtitleTrack &track = _loadedTracks[sanitized];
 	for (size_t i = 0; i < track.entries.size(); ++i) {
 		const SubtitleEntry &entry = track.entries[i];
 		if (currentMs >= entry.startMs && currentMs <= entry.endMs) {
@@ -182,63 +227,47 @@ const SubtitleEntry *SubtitleManager::getSubtitleForTime(const Common::String &m
 }
 
 bool SubtitleManager::renderSubtitleForMedia(Graphics::Surface *destSurface, const Common::String &mediaId, uint32 currentMs) {
-	if (!areSubtitlesEnabled())
+	if (!areSubtitlesEnabled()) {
 		return false;
+	}
 
 	const SubtitleEntry *sub = getSubtitleForTime(mediaId, currentMs);
-	if (!sub)
+	if (!sub) {
 		return false;
+	}
 	renderSubtitle(destSurface, *sub);
 	return true;
 }
 
 bool SubtitleManager::renderSubtitleForMedia(Graphics::Surface *destSurface, const Common::Rect &boxRect, const Common::String &mediaId, uint32 currentMs) {
-	if (!areSubtitlesEnabled())
+	if (!areSubtitlesEnabled()) {
 		return false;
+	}
 
 	const SubtitleEntry *sub = getSubtitleForTime(mediaId, currentMs);
-	if (!sub)
+	if (!sub) {
 		return false;
+	}
 	renderSubtitle(destSurface, boxRect, *sub);
 	return true;
 }
 
 void SubtitleManager::renderSubtitle(Graphics::Surface *destSurface, const SubtitleEntry &entry) {
-	updateFont();
-	int fontHeight = _font ? _font->getFontHeight() : 14;
-	int calculatedBoxHeight = (fontHeight * 2) + 12;
-	Common::Rect defaultBox(kSubtitleBoxX, kSubtitleViewportTop, kSubtitleBoxX + kSubtitleBoxWidth, kSubtitleViewportTop + calculatedBoxHeight);
-	renderSubtitle(destSurface, defaultBox, entry);
+	renderSubtitle(destSurface, getDefaultBoxBounds(), entry);
 }
 
 void SubtitleManager::renderSubtitle(Graphics::Surface *destSurface, const Common::Rect &boxRect, const SubtitleEntry &entry) {
 	updateFont();
-	if (!destSurface || !_font || entry.text.empty())
+	if (!destSurface || !_font || entry.text.empty()) {
 		return;
-
-	if (boxRect.width() <= 20 || boxRect.height() <= 10)
-		return;
+	}
 
 	int fontHeight = _font->getFontHeight();
 
 	// Dark semi-transparent scrim background color
 	float alpha = kSubtitleBoxOpacity;
-	if (alpha < 0.0f) alpha = 0.0f;
-	if (alpha > 1.0f) alpha = 1.0f;
-
-	byte targetR = 38;
-	byte targetG = 12;
-	byte targetB = 12;
-	uint32 scrimColor = _vm->_gfx->getColor(targetR, targetG, targetB);
-	
-	// Glowing orange/copper border color for bottom line matching HUD
-	uint32 bottomBorderColor = _vm->_gfx->getColor(237, 109, 66);
-
-	// Subtle dark red/brown border color for left/right side edges and chamfers
-	uint32 sideBorderColor = _vm->_gfx->getColor(105, 36, 28);
-
-	// Muted copper-orange border color for top accent line (Option 2b)
-	uint32 topBorderColor = _vm->_gfx->getColor(140, 60, 35);
+	if (alpha < 0.0f) { alpha = 0.0f; }
+	if (alpha > 1.0f) { alpha = 1.0f; }
 
 	// -----------------------------------------------------------------------
 	// Render subtitle box scrim & bottom chamfered border.
@@ -250,7 +279,7 @@ void SubtitleManager::renderSubtitle(Graphics::Surface *destSurface, const Commo
 	//    0.85x alpha on odd rows) to simulate an interlaced glass CRT monitor.
 	// -----------------------------------------------------------------------
 	for (int y = boxRect.top; y < boxRect.bottom; ++y) {
-		if (y < 0 || y >= destSurface->h) continue;
+		if (y < 0 || y >= destSurface->h) { continue; }
 
 		int dy = y - boxRect.top;
 		int distFromBottom = (boxRect.bottom - 1) - y;
@@ -264,12 +293,12 @@ void SubtitleManager::renderSubtitle(Graphics::Surface *destSurface, const Commo
 
 		// CRT Scanline Raster: alternate line alpha for subtle interlaced CRT glass effect
 		float curAlpha = (dy % 2 == 0) ? (alpha * 1.15f) : (alpha * 0.85f);
-		if (curAlpha > 0.95f) curAlpha = 0.95f;
-		if (curAlpha < 0.20f) curAlpha = 0.20f;
+		if (curAlpha > 0.95f) { curAlpha = 0.95f; }
+		if (curAlpha < 0.20f) { curAlpha = 0.20f; }
 		float curInvAlpha = 1.0f - curAlpha;
 
 		for (int x = startX; x < endX; ++x) {
-			if (x < 0 || x >= destSurface->w) continue;
+			if (x < 0 || x >= destSurface->w) { continue; }
 
 			// Border pixels: top line (muted copper-orange), bottom line (bright orange), side/diagonal edges (subtle dark red)
 			bool isTopBorder    = (y == boxRect.top);
@@ -278,38 +307,27 @@ void SubtitleManager::renderSubtitle(Graphics::Surface *destSurface, const Commo
 			bool isBorderPixel  = isTopBorder || isBottomBorder || isSideBorder;
 
 			if (isBorderPixel) {
-				uint32 curBorderColor = isTopBorder ? topBorderColor : (isBottomBorder ? bottomBorderColor : sideBorderColor);
-
-				if (destSurface->format.bytesPerPixel == 2) {
-					uint16 *ptr = (uint16 *)destSurface->getBasePtr(x, y);
-					*ptr = (uint16)curBorderColor;
-				} else if (destSurface->format.bytesPerPixel == 4) {
-					uint32 *ptr = (uint32 *)destSurface->getBasePtr(x, y);
-					*ptr = curBorderColor;
-				} else {
-					byte *ptr = (byte *)destSurface->getBasePtr(x, y);
-					*ptr = (byte)curBorderColor;
-				}
+				uint32 curBorderColor = isTopBorder ? _vm->_gfx->getColor(140, 60, 35) : (isBottomBorder ? _vm->_gfx->getColor(237, 109, 66) : _vm->_gfx->getColor(105, 36, 28));
+				drawPixel(destSurface, x, y, curBorderColor);
 			} else {
 				if (destSurface->format.bytesPerPixel == 2) {
 					uint16 *ptr = (uint16 *)destSurface->getBasePtr(x, y);
 					byte r, g, b;
 					destSurface->format.colorToRGB(*ptr, r, g, b);
-					byte blendedR = blendColorComponent(r, targetR, curAlpha, curInvAlpha);
-					byte blendedG = blendColorComponent(g, targetG, curAlpha, curInvAlpha);
-					byte blendedB = blendColorComponent(b, targetB, curAlpha, curInvAlpha);
+					byte blendedR = blendColorComponent(r, 38, curAlpha, curInvAlpha);
+					byte blendedG = blendColorComponent(g, 12, curAlpha, curInvAlpha);
+					byte blendedB = blendColorComponent(b, 12, curAlpha, curInvAlpha);
 					*ptr = destSurface->format.RGBToColor(blendedR, blendedG, blendedB);
 				} else if (destSurface->format.bytesPerPixel == 4) {
 					uint32 *ptr = (uint32 *)destSurface->getBasePtr(x, y);
 					byte r, g, b;
 					destSurface->format.colorToRGB(*ptr, r, g, b);
-					byte blendedR = blendColorComponent(r, targetR, curAlpha, curInvAlpha);
-					byte blendedG = blendColorComponent(g, targetG, curAlpha, curInvAlpha);
-					byte blendedB = blendColorComponent(b, targetB, curAlpha, curInvAlpha);
+					byte blendedR = blendColorComponent(r, 38, curAlpha, curInvAlpha);
+					byte blendedG = blendColorComponent(g, 12, curAlpha, curInvAlpha);
+					byte blendedB = blendColorComponent(b, 12, curAlpha, curInvAlpha);
 					*ptr = destSurface->format.RGBToColor(blendedR, blendedG, blendedB);
 				} else {
-					byte *ptr = (byte *)destSurface->getBasePtr(x, y);
-					*ptr = (byte)scrimColor;
+					drawPixel(destSurface, x, y, _vm->_gfx->getColor(38, 12, 12));
 				}
 			}
 		}
@@ -400,6 +418,25 @@ Common::Array<Common::String> SubtitleManager::wrapText(const Common::String &te
 int SubtitleManager::getFontHeight() {
 	updateFont();
 	return _font ? _font->getFontHeight() : 14;
+}
+
+int SubtitleManager::getBoxHeight() {
+	return (getFontHeight() * 2) + 14;
+}
+
+Common::Rect SubtitleManager::getDefaultBoxBounds() {
+	int boxHeight = getBoxHeight();
+	return Common::Rect(kSubtitleBoxX, kSubtitleViewportTop, kSubtitleBoxX + kSubtitleBoxWidth, kSubtitleViewportTop + boxHeight);
+}
+
+Common::Rect SubtitleManager::calculateBoxBoundsForVideo(const Common::Rect &videoFrameRect) {
+	int boxHeight = getBoxHeight();
+	return Common::Rect(
+		videoFrameRect.left - 16,
+		videoFrameRect.bottom,
+		videoFrameRect.right + 12,
+		videoFrameRect.bottom + boxHeight
+	);
 }
 
 } // End of namespace Buried

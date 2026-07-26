@@ -365,13 +365,24 @@ bool SoundManager::playSynchronousAIComment(const Common::Path &fileName) {
 	_soundData[kAIVoiceIndex] = new Sound();
 	_currentAIVoiceMediaId.clear();
 
-	if (_vm->_subtitles)
-		_vm->_subtitles->invalidateSubtitles();
+	_vm->_subtitles->invalidateSubtitles();
 
 	_vm->enableCutsceneKeymap(false);
 
 	// Return success
 	return true;
+}
+
+// Extracts a normalized media ID string from a file path by stripping file extension and converting to uppercase.
+// Example: "DATA/DA_V2_01.RAW" -> "DA_V2_01"
+static Common::String extractMediaIdFromPath(const Common::Path &path) {
+	Common::String fileNameComponent = path.getLastComponent().toString();
+	if (fileNameComponent.contains(".")) {
+		size_t dotPos = fileNameComponent.findLastOf('.');
+		fileNameComponent = fileNameComponent.substr(0, dotPos);
+	}
+	fileNameComponent.toUppercase();
+	return fileNameComponent;
 }
 
 bool SoundManager::playAsynchronousAIComment(const Common::Path &fileName) {
@@ -382,7 +393,7 @@ bool SoundManager::playAsynchronousAIComment(const Common::Path &fileName) {
 	if (!_soundData[kAIVoiceIndex]->load(fileName))
 		return false;
 
-	_currentAIVoiceMediaId = fileName.getLastComponent().toString();
+	_currentAIVoiceMediaId = extractMediaIdFromPath(fileName);
 
 	// Set some parameters
 	_soundData[kAIVoiceIndex]->_flags = SOUND_FLAG_DESTROY_AFTER_COMPLETION;
@@ -422,8 +433,7 @@ void SoundManager::stopAsynchronousAIComment() {
 	if (isAsynchronousAICommentPlaying()) {
 		_soundData[kAIVoiceIndex]->stop();
 		_currentAIVoiceMediaId.clear();
-		if (_vm->_subtitles)
-			_vm->_subtitles->invalidateSubtitles();
+		_vm->_subtitles->invalidateSubtitles();
 	}
 }
 
@@ -475,14 +485,8 @@ bool SoundManager::playSynchronousSoundEffect(const Common::Path &fileName, int 
 	Cursor oldCursor = _vm->_gfx->setCursor(kCursorWait);
 	g_system->updateScreen();
 
-	// Store media ID for subtitle lookup
-	Common::String lastComp = fileName.getLastComponent().toString();
-	if (lastComp.contains(".")) {
-		size_t dotPos = lastComp.findLastOf('.');
-		lastComp = lastComp.substr(0, dotPos);
-	}
-	lastComp.toUppercase();
-	_syncSoundMediaId = lastComp;
+	// Store normalized media ID for subtitle lookup
+	_syncSoundMediaId = extractMediaIdFromPath(fileName);
 	_syncSoundStartTime = g_system->getMillis();
 
 	// Attempt to start the sound playing using the standard sound effect playback function
@@ -509,8 +513,7 @@ bool SoundManager::playSynchronousSoundEffect(const Common::Path &fileName, int 
 	_syncSoundMediaId.clear();
 
 	// Clear subtitle overlay when playback finishes
-	if (_vm->_subtitles)
-		_vm->_subtitles->invalidateSubtitles();
+	_vm->_subtitles->invalidateSubtitles();
 
 	_vm->enableCutsceneKeymap(false);
 

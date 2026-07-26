@@ -201,20 +201,18 @@ void VideoWindow::onPaint() {
 			_vm->_gfx->crossBlit(_vm->_gfx->getScreen(), absoluteRect.left + _dstRect.left, absoluteRect.top + _dstRect.top, _dstRect.width(), _dstRect.height(), _lastFrame, _srcRect.left, _srcRect.top);
 
 		bool isPlayingNow = (_video && _video->isPlaying() && !_mediaId.empty());
-		if (isPlayingNow && _vm->_subtitles) {
-			int fontHeight = _vm->_subtitles->getFontHeight();
-			int boxHeight = (fontHeight * 2) + 8;
-			Common::Rect videoSubBox = calculateSubtitleBounds(boxHeight);
+		if (isPlayingNow) {
+			Common::Rect videoSubBox = calculateSubtitleBounds();
 			_vm->_subtitles->renderSubtitleForMedia(_vm->_gfx->getScreen(), videoSubBox, _mediaId, _video->getTime());
 		} else if (_lastSubtitledPlaying && !isPlayingNow) {
-			if (_vm->_subtitles)
-				_vm->_subtitles->invalidateSubtitles(getParent());
+			// Video playback has stopped; invalidate parent window to clear subtitle overlay from screen
+			_vm->_subtitles->invalidateSubtitles(getParent());
 		}
 		_lastSubtitledPlaying = isPlayingNow;
 	}
 }
 
-Common::Rect VideoWindow::calculateSubtitleBounds(int boxHeight) const {
+Common::Rect VideoWindow::calculateSubtitleBounds() const {
 	Common::Rect absoluteRect = getAbsoluteRect();
 	Common::Rect videoFrameRect;
 	if (_srcRect.isEmpty() && _dstRect.isEmpty()) {
@@ -228,24 +226,7 @@ Common::Rect VideoWindow::calculateSubtitleBounds(int boxHeight) const {
 		);
 	}
 
-	// For full-screen cutscene videos (height >= 300, e.g. Intro video), anchor inside the bottom of the video frame
-	if (videoFrameRect.height() >= 300) {
-		int bottomPadding = 12;
-		return Common::Rect(
-			videoFrameRect.left + kSubtitleBoxX,
-			videoFrameRect.bottom - boxHeight - bottomPadding,
-			videoFrameRect.left + kSubtitleBoxX + kSubtitleBoxWidth,
-			videoFrameRect.bottom - bottomPadding
-		);
-	}
-
-	// For standard viewport videos (432x189), position directly below the viewport, expanding to cover the side bezel lips
-	return Common::Rect(
-		videoFrameRect.left - 6,
-		videoFrameRect.bottom,
-		videoFrameRect.right + 6,
-		videoFrameRect.bottom + boxHeight
-	);
+	return _vm->_subtitles->calculateBoxBoundsForVideo(videoFrameRect);
 }
 
 void VideoWindow::onActionEnd(const Common::CustomEventType &action, uint flags) {
