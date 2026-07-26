@@ -85,6 +85,13 @@ void VideoWindow::stopVideo() {
 		_vm->_gfx->toggleCursor(true);
 		_video->stop();
 		_mode = kModeStopped;
+		if (!_mediaId.empty()) {
+			_mediaId.clear();
+			if (_lastSubtitledPlaying) {
+				_lastSubtitledPlaying = false;
+				_vm->_subtitles->invalidateSubtitles(getParent());
+			}
+		}
 	}
 }
 
@@ -133,6 +140,11 @@ bool VideoWindow::openVideo(const Common::Path &fileName) {
 
 void VideoWindow::closeVideo() {
 	if (_video) {
+		if (_lastSubtitledPlaying) {
+			_lastSubtitledPlaying = false;
+			_vm->_subtitles->invalidateSubtitles(getParent());
+		}
+		_mediaId.clear();
 		delete _video;
 		_video = nullptr;
 		_vm->_gfx->toggleCursor(true);
@@ -187,6 +199,13 @@ void VideoWindow::updateVideo() {
 			_video->stop();
 			_vm->_gfx->toggleCursor(true);
 			_mode = kModeStopped;
+			if (!_mediaId.empty()) {
+				_mediaId.clear();
+				if (_lastSubtitledPlaying) {
+					_lastSubtitledPlaying = false;
+					_vm->_subtitles->invalidateSubtitles(getParent());
+				}
+			}
 		}
 	}
 }
