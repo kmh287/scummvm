@@ -48,7 +48,7 @@ class Window;
 // The X coordinate of the subtitle box's top-left edge.
 static constexpr int kSubtitleBoxX = 46;
 // The Y coordinate of the subtitle box's top-left edge.
-static constexpr int kSubtitleBoxY = 319;
+static constexpr int kSubtitleBoxY = 317;
 // The width of the subtitle box.
 static constexpr int kSubtitleBoxWidth = 462;
 // The opacity of the subtitle box. 0f would be fully transparent. 1f would be fully opaque.
