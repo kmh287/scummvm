@@ -60,9 +60,7 @@ SceneViewWindow::SceneViewWindow(BuriedEngine *vm, Window *parent) : Window(vm, 
 	_asyncMovie = nullptr;
 	_asyncMovieStartFrame = 0;
 	_loopAsyncMovie = false;
-	_lastAIVoicePlaying = false;
-	_lastSyncSoundPlaying = false;
-	_lastSFXPlaying = false;
+	_lastSubtitledAudioPlaying = false;
 	_paused = false;
 	_cycleEnabled = ((FrameWindow *)(_parent->getParent()))->isFrameCyclingDefault();
 	_forceCycleEnabled = false;
@@ -2404,18 +2402,31 @@ void SceneViewWindow::onPaint() {
 		// Subtitle Overlay Rendering:
 		// 1. Asynchronous AI Voice Comments (e.g. Arthur dialogue, hints, biochip voiceover)
 		// 2. Synchronous Sound Effects (e.g. INN sponsor clips, environment audio scenes)
-		// 3. Subtitled Sound Effects (e.g. Arthur comms broadcasts like "GET OFF MY STATION")
+		// 3. Interface Sounds (e.g. tutorial / interface narration clips)
+		// 4. Subtitled Sound Effects (e.g. Arthur comms broadcasts like "GET OFF MY STATION")
 		if (_vm->_sound->isAIVoicePlaying()) {
 			_vm->_subtitles->renderSubtitleForMedia(_vm->_gfx->getScreen(), _vm->_sound->getAIVoiceMediaId(), _vm->_sound->getAIVoicePosition());
 		} else if (_vm->_sound->isSyncSoundPlaying()) {
 			_vm->_subtitles->renderSubtitleForMedia(_vm->_gfx->getScreen(), _vm->_sound->getSyncSoundMediaId(), _vm->_sound->getSyncSoundPosition());
+		} else if (_vm->_sound->isInterfaceSoundPlaying()) {
+			_vm->_subtitles->renderSubtitleForMedia(_vm->_gfx->getScreen(), _vm->_sound->getInterfaceSoundMediaId(), _vm->_sound->getInterfaceSoundPosition());
 		} else if (_vm->_sound->isSubtitledSFXPlaying()) {
-			for (int i = 0; i < 2; ++i) {
-				Common::String sfxMediaId = _vm->_sound->getSoundEffectMediaId(i);
-				if (!sfxMediaId.empty()) {
-					if (_vm->_subtitles->renderSubtitleForMedia(_vm->_gfx->getScreen(), sfxMediaId, _vm->_sound->getSoundEffectPosition(i)))
-						break;
-				}
+			// SFX plays on either of two channels. One or the other could have a subtitled effect. For example,
+			// Arthur's spooky warnings are played as SFX rather than as AI voice or sync sounds.
+			Common::String soundEffectChannel0MediaId = _vm->_sound->getSoundEffectMediaId(/* channel= */ 0);
+			Common::String soundEffectChannel1MediaId = _vm->_sound->getSoundEffectMediaId(/* channel= */ 1);
+			bool renderedSubtitle = false;
+			if (!soundEffectChannel0MediaId.empty()) {
+				renderedSubtitle = _vm->_subtitles->renderSubtitleForMedia(
+					_vm->_gfx->getScreen(),
+					soundEffectChannel0MediaId,
+					_vm->_sound->getSoundEffectPosition(/* channel= */ 0));
+			}
+			if (!renderedSubtitle && !soundEffectChannel1MediaId.empty()) {
+				_vm->_subtitles->renderSubtitleForMedia(
+					_vm->_gfx->getScreen(),
+					soundEffectChannel1MediaId,
+					_vm->_sound->getSoundEffectPosition(1));
 			}
 		}
 	}
@@ -2446,17 +2457,20 @@ void SceneViewWindow::onTimer(uint timer) {
 	if (_currentScene && !_infoWindowDisplayed && !_bioChipWindowDisplayed && !_burnedLetterDisplayed)
 		_currentScene->timerCallback(this);
 
-	bool aiVoicePlaying = sound->isAIVoicePlaying();
-	bool syncSoundPlaying = sound->isSyncSoundPlaying();
-	bool sfxPlaying = sound->isSubtitledSFXPlaying();
+	bool subtitledAudioPlaying = sound->isAIVoicePlaying() ||
+		sound->isSyncSoundPlaying() ||
+		sound->isSubtitledSFXPlaying() ||
+		sound->isInterfaceSoundPlaying();
 
-	// Track state transitions (_lastAIVoicePlaying / _lastSyncSoundPlaying / _lastSFXPlaying) so that when audio stops playing
-	// (current is false but _last is true), we execute one final invalidation to clear the subtitle overlay.
-	if (aiVoicePlaying || _lastAIVoicePlaying || syncSoundPlaying || _lastSyncSoundPlaying || sfxPlaying || _lastSFXPlaying) {
+	// Subtitles need to be invalidated under three different circumstances:
+	// 1. Audio has begun playing and we need to show subtitles.
+	// 2. Audio was playing with subtitles and now we need ot hide subtitles.
+	// 3. Audio playback is ongoing, but we need to change from one subtitle card to another.
+	// Due to the last condition, checking simply for a change in playback state is insufficient since we may need
+	// to redraw the subtitles even while audio playback is ongoing.
+	if (subtitledAudioPlaying || _lastSubtitledAudioPlaying) {
 		_vm->_subtitles->invalidateSubtitles(this);
-		_lastAIVoicePlaying = aiVoicePlaying;
-		_lastSyncSoundPlaying = syncSoundPlaying;
-		_lastSFXPlaying = sfxPlaying;
+		_lastSubtitledAudioPlaying = subtitledAudioPlaying;
 	}
 
 	sound->timerCallback();

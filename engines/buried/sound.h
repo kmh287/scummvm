@@ -77,6 +77,7 @@ public:
 	bool stopInterfaceSound();
 	bool isInterfaceSoundPlaying();
 	uint32 getInterfaceSoundPosition();
+	Common::String getInterfaceSoundMediaId() const;
 
 	// START AND STOP SPECIFIED FOOTSTEPS SOUND
 	bool startFootsteps(int footstepsID);
@@ -166,6 +167,7 @@ private:
 	uint32 _syncSoundStartTime;
 	Common::String _sfxMediaId[2];
 	uint32 _sfxStartTime[2];
+	Common::String _interfaceMediaId;
 };
 
 } // End of namespace Buried

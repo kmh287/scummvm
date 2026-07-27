@@ -18,7 +18,6 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  *
  */
-
 #include "common/config-manager.h"
 #include "common/translation.h"
 #include "gui/ThemeEval.h"
@@ -30,21 +29,14 @@
 
 namespace Buried {
 
-static const char *const kSubtitleFontSizeKey = "subtitle_font_size";
-
-// Font size preset values (pixel height)
-enum {
-	kFontSizeSmall = 12,
-	kFontSizeMedium = 14,
-	kFontSizeLarge = 18,
-	kFontSizeXLarge = 22
-};
-
-BuriedOptionsWidget::BuriedOptionsWidget(GUI::GuiObject *boss, const Common::String &name, const Common::String &domain)
-	: OptionsContainerWidget(boss, name, "BuriedGameOptionsDialog", domain) {
+BuriedOptionsWidget::BuriedOptionsWidget(GuiObject *boss, const Common::String &name, const Common::String &domain)
+	: OptionsContainerWidget(boss, name, /* dialogLayout= */"BuriedGameOptionsDialog", domain) {
 
 	// "Subtitle font size:" label
-	_fontSizeDesc = new GUI::StaticTextWidget(widgetsBoss(), "BuriedGameOptionsDialog.FontSizeDesc", _("Subtitle font size:"));
+	_fontSizeDesc = new GUI::StaticTextWidget(
+		widgetsBoss(),
+		/* name= */"BuriedGameOptionsDialog.FontSizeDesc",
+		/* text= */ _("Subtitle font size:"));
 	_fontSizeDesc->setAlign(Graphics::kTextAlignRight);
 
 	// Dropdown populated with named presets
@@ -77,16 +69,16 @@ static int getSavedSubtitleFontSize(const Common::String &domain) {
 	if (ConfMan.hasKey(kSubtitleFontSizeKey, domain)) {
 		return ConfMan.getInt(kSubtitleFontSizeKey, domain);
 	}
-	return kDefaultSubtitleFontSize;
+	return kFontSizeMedium;
 }
 
 // Writes the subtitle font size setting to the active ScummVM configuration domain ("subtitle_font_size").
-static void saveSubtitleFontSize(const Common::String &domain, int fontSize) {
+static void saveSubtitleFontSize(const Common::String &domain, const int fontSize) {
 	ConfMan.setInt(kSubtitleFontSizeKey, fontSize, domain);
 }
 
 void BuriedOptionsWidget::load() {
-	int fontSize = getSavedSubtitleFontSize(_domain);
+	const int fontSize = getSavedSubtitleFontSize(_domain);
 	_fontSizePopUp->setSelectedTag(fontSize);
 
 	// If the saved value doesn't match any preset, fall back to Medium
@@ -97,11 +89,11 @@ void BuriedOptionsWidget::load() {
 
 bool BuriedOptionsWidget::save() {
 	uint32 selectedTag = _fontSizePopUp->getSelectedTag();
-	if ((int32)selectedTag == -1) {
+	if ((int32) selectedTag == -1) {
 		selectedTag = kDefaultSubtitleFontSize;
 	}
 
-	saveSubtitleFontSize(_domain, (int)selectedTag);
+	saveSubtitleFontSize(_domain, (int) selectedTag);
 	return true;
 }
 

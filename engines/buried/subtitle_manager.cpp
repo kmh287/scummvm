@@ -19,6 +19,7 @@
  *
  */
 
+#include "buried/dialogs.h"
 #include "buried/buried.h"
 #include "buried/graphics.h"
 #include "buried/subtitle_manager.h"
@@ -80,16 +81,8 @@ void SubtitleManager::updateSubtitles(Window *targetWindow) {
 
 void SubtitleManager::updateFont() {
 	int requestedSize = kDefaultSubtitleFontSize;
-	if (ConfMan.hasKey("subtitle_font_size")) {
-		requestedSize = ConfMan.getInt("subtitle_font_size");
-	}
-
-	// Clamp font pixel height between 10px and 24px to ensure text remains legible while fitting inside the subtitle box
-	if (requestedSize < 10) {
-		requestedSize = 10;
-	}
-	if (requestedSize > 24) {
-		requestedSize = 24;
+	if (ConfMan.hasKey(kSubtitleFontSizeKey)) {
+		requestedSize = ConfMan.getInt(kSubtitleFontSizeKey);
 	}
 
 	if (!_font || _fontSize != requestedSize) {
@@ -101,11 +94,11 @@ void SubtitleManager::updateFont() {
 	}
 }
 
-static inline byte blendColorComponent(byte srcComp, byte targetComp, float alpha, float invAlpha) {
+static byte blendColorComponent(byte srcComp, byte targetComp, float alpha, float invAlpha) {
 	return (byte)(srcComp * invAlpha + targetComp * alpha);
 }
 
-static inline void drawPixel(Graphics::Surface *destSurface, int x, int y, uint32 color) {
+static void drawPixel(Graphics::Surface *destSurface, int x, int y, uint32 color) {
 	if (destSurface->format.bytesPerPixel == 2) {
 		uint16 *ptr = (uint16 *)destSurface->getBasePtr(x, y);
 		*ptr = (uint16)color;

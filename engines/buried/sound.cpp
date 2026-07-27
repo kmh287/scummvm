@@ -628,6 +628,7 @@ bool SoundManager::playInterfaceSound(const Common::Path &fileName) {
 	if (!_soundData[kInterfaceIndex]->load(fileName))
 		return false;
 
+	_interfaceMediaId = extractMediaIdFromPath(fileName);
 	_soundData[kInterfaceIndex]->_flags = SOUND_FLAG_DESTROY_AFTER_COMPLETION;
 	_soundData[kInterfaceIndex]->_soundType = Audio::Mixer::kSFXSoundType;
 
@@ -642,6 +643,8 @@ bool SoundManager::stopInterfaceSound() {
 	// Stop the sound
 	delete _soundData[kInterfaceIndex];
 	_soundData[kInterfaceIndex] = new Sound();
+	_interfaceMediaId.clear();
+	_vm->_subtitles->invalidateSubtitles();
 	return true;
 }
 
@@ -657,6 +660,10 @@ uint32 SoundManager::getInterfaceSoundPosition() {
 		return 0;
 
 	return g_system->getMixer()->getSoundElapsedTime(*_soundData[kInterfaceIndex]->_handle);
+}
+
+Common::String SoundManager::getInterfaceSoundMediaId() const {
+	return _interfaceMediaId;
 }
 
 bool SoundManager::startFootsteps(int footstepsID) {
@@ -796,6 +803,11 @@ void SoundManager::timerCallback() {
 			_sfxMediaId[channel].clear();
 			_vm->_subtitles->invalidateSubtitles();
 		}
+	}
+
+	if (!_interfaceMediaId.empty() && !_soundData[kInterfaceIndex]->isPlaying()) {
+		_interfaceMediaId.clear();
+		_vm->_subtitles->invalidateSubtitles();
 	}
 }
 

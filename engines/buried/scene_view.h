@@ -192,9 +192,8 @@ private:
 	int _asyncMovieStartFrame;
 	int _asyncMovieFrameCount;
 	bool _loopAsyncMovie;
-	bool _lastAIVoicePlaying;
-	bool _lastSyncSoundPlaying;
-	bool _lastSFXPlaying;
+	// Whether subtitled audio was playing during the previous timer callback.
+	bool _lastSubtitledAudioPlaying;
 
 	Common::Path _lastAICommentFileName;
 

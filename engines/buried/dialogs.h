@@ -31,6 +31,19 @@ class StaticTextWidget;
 
 namespace Buried {
 
+// Font size preset values (pixel height)
+enum FontSize {
+	kFontSizeSmall = 12,
+	kFontSizeMedium = 14,
+	kFontSizeLarge = 18,
+	kFontSizeXLarge = 22
+};
+
+static constexpr int kDefaultSubtitleFontSize = kFontSizeMedium;
+
+// Custom key for the user's font size preference from the Game Options menu
+static constexpr auto kSubtitleFontSizeKey = "subtitle_font_size";
+
 /**
  * Engine-specific options widget shown in the Audio tab of the ScummVM
  * in-game options dialog (Ctrl+F5 → Options → Audio).
@@ -41,12 +54,15 @@ namespace Buried {
  */
 class BuriedOptionsWidget : public GUI::OptionsContainerWidget {
 public:
-	BuriedOptionsWidget(GUI::GuiObject *boss, const Common::String &name, const Common::String &domain);
+	BuriedOptionsWidget(GuiObject *boss, const Common::String &name, const Common::String &domain);
 
 	// OptionsContainerWidget interface
-	void defineLayout(GUI::ThemeEval &layouts, const Common::String &layoutName, const Common::String &overlayedLayout) const override;
 	void load() override;
 	bool save() override;
+
+protected:
+	// OptionsContainerWidget interface
+	void defineLayout(GUI::ThemeEval &layouts, const Common::String &layoutName, const Common::String &overlayedLayout) const override;
 
 private:
 	GUI::PopUpWidget *_fontSizePopUp;

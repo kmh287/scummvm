@@ -38,6 +38,7 @@
 #include "buried/buried.h"
 #include "buried/graphics.h"
 #include "buried/window.h"
+#include "common/std/algorithm.h"
 
 namespace Buried {
 
@@ -85,7 +86,7 @@ Graphics::Font *GraphicsManager::createArialFont(int size, bool bold) const {
 
 	Common::SeekableReadStream *stream = SearchMan.createReadStreamForMember(defaultBaseName);
 
-	// Map requested pixel height to TTF point size
+	// Map requested pixel height to point size
 	switch (size) {
 	case 12:
 	case 13:
@@ -95,13 +96,11 @@ Graphics::Font *GraphicsManager::createArialFont(int size, bool bold) const {
 		size = 8;
 		break;
 	case 20:
-		size = 12; // Preserve original size 20 mapping for death/completion screens
+		size = 12;
 		break;
 	default:
-		size = (size * 8) / 14;
-		if (size < 6) {
-			size = 6;
-		}
+		size = size * 8 / 14;
+		size = Std::max(size, 6);
 		break;
 	}
 

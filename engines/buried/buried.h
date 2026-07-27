@@ -138,6 +138,7 @@ public:
 
 	GraphicsManager *_gfx;
 	SoundManager *_sound;
+	// Manager for all interactions with the game's subtitles.
 	SubtitleManager *_subtitles;
 	Window *_mainWindow; // Only one main window is supported.
 	Window *_focusedWindow;

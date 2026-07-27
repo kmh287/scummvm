@@ -115,6 +115,7 @@ public:
 	}
 	Common::KeymapArray initKeymaps(const char *target) const override;
 
+	// Add widget for font size selection.
 	GUI::OptionsContainerWidget *buildEngineOptionsWidget(GUI::GuiObject *boss, const Common::String &name, const Common::String &target) const override {
 		return new Buried::BuriedOptionsWidget(boss, name, target);
 	}

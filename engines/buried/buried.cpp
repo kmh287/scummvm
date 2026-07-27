@@ -466,10 +466,11 @@ void BuriedEngine::yield(VideoWindow *video, int soundId) {
 	if ((video || soundId >= 0) && _allowVideoSkip)
 		processAudioVideoSkipMessages(video, soundId);
 
-	if (_subtitles)
-		_subtitles->updateSubtitles();
-
 	_gfx->updateScreen();
+	// Sometimes, the game yields while a character is speaking to block UI interaction. Subtitles must be updated
+	// here if the dialog that caused the yield requires more than just one subtitle card. Otherwise, only the first
+	// card would be shown.
+	_subtitles->updateSubtitles();
 	_system->delayMillis(10);
 
 	_yielding = false;

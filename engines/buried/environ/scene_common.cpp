@@ -649,6 +649,7 @@ int InteractiveNewsNetwork::movieCallback(Window *viewWindow, VideoWindow *movie
 	// Restart sound if the movie has ended
 	if (animationID == -1 && status == MOVIE_STOPPED) {
 		_vm->_sound->restart();
+		// Remove any lingering subtitle card from the clip.
 		_vm->_subtitles->invalidateSubtitles(viewWindow);
 		return SC_FALSE;
 	}
