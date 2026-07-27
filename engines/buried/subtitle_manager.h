@@ -67,6 +67,7 @@ public:
 
 	bool areSubtitlesEnabled() const;
 	void invalidateSubtitles(Window *targetWindow = nullptr);
+	void updateSubtitles(Window *targetWindow = nullptr);
 
 	bool loadSubtitlesDat();
 	const SubtitleEntry *getSubtitleForTime(const Common::String &mediaId, uint32 currentMs);

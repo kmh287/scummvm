@@ -193,8 +193,8 @@ void VideoWindow::updateVideo() {
 
 			// Invalidate the window so it gets updated
 			invalidateWindow(false);
-			if (_video->isPlaying() && !_mediaId.empty() && _vm->_subtitles && _vm->_subtitles->areSubtitlesEnabled()) {
-				_vm->_subtitles->invalidateSubtitles(getParent());
+			if (_video->isPlaying() && !_mediaId.empty() && _vm->_subtitles) {
+				_vm->_subtitles->updateSubtitles(getParent());
 			}
 		}
 

@@ -62,6 +62,7 @@ SceneViewWindow::SceneViewWindow(BuriedEngine *vm, Window *parent) : Window(vm, 
 	_loopAsyncMovie = false;
 	_lastAIVoicePlaying = false;
 	_lastSyncSoundPlaying = false;
+	_lastSFXPlaying = false;
 	_paused = false;
 	_cycleEnabled = ((FrameWindow *)(_parent->getParent()))->isFrameCyclingDefault();
 	_forceCycleEnabled = false;
@@ -2403,10 +2404,19 @@ void SceneViewWindow::onPaint() {
 		// Subtitle Overlay Rendering:
 		// 1. Asynchronous AI Voice Comments (e.g. Arthur dialogue, hints, biochip voiceover)
 		// 2. Synchronous Sound Effects (e.g. INN sponsor clips, environment audio scenes)
+		// 3. Subtitled Sound Effects (e.g. Arthur comms broadcasts like "GET OFF MY STATION")
 		if (_vm->_sound->isAIVoicePlaying()) {
 			_vm->_subtitles->renderSubtitleForMedia(_vm->_gfx->getScreen(), _vm->_sound->getAIVoiceMediaId(), _vm->_sound->getAIVoicePosition());
 		} else if (_vm->_sound->isSyncSoundPlaying()) {
 			_vm->_subtitles->renderSubtitleForMedia(_vm->_gfx->getScreen(), _vm->_sound->getSyncSoundMediaId(), _vm->_sound->getSyncSoundPosition());
+		} else if (_vm->_sound->isSubtitledSFXPlaying()) {
+			for (int i = 0; i < 2; ++i) {
+				Common::String sfxMediaId = _vm->_sound->getSoundEffectMediaId(i);
+				if (!sfxMediaId.empty()) {
+					if (_vm->_subtitles->renderSubtitleForMedia(_vm->_gfx->getScreen(), sfxMediaId, _vm->_sound->getSoundEffectPosition(i)))
+						break;
+				}
+			}
 		}
 	}
 }
@@ -2438,13 +2448,15 @@ void SceneViewWindow::onTimer(uint timer) {
 
 	bool aiVoicePlaying = sound->isAIVoicePlaying();
 	bool syncSoundPlaying = sound->isSyncSoundPlaying();
+	bool sfxPlaying = sound->isSubtitledSFXPlaying();
 
-	// Track state transitions (_lastAIVoicePlaying / _lastSyncSoundPlaying) so that when audio stops playing
+	// Track state transitions (_lastAIVoicePlaying / _lastSyncSoundPlaying / _lastSFXPlaying) so that when audio stops playing
 	// (current is false but _last is true), we execute one final invalidation to clear the subtitle overlay.
-	if (aiVoicePlaying || _lastAIVoicePlaying || syncSoundPlaying || _lastSyncSoundPlaying) {
+	if (aiVoicePlaying || _lastAIVoicePlaying || syncSoundPlaying || _lastSyncSoundPlaying || sfxPlaying || _lastSFXPlaying) {
 		_vm->_subtitles->invalidateSubtitles(this);
 		_lastAIVoicePlaying = aiVoicePlaying;
 		_lastSyncSoundPlaying = syncSoundPlaying;
+		_lastSFXPlaying = sfxPlaying;
 	}
 
 	sound->timerCallback();

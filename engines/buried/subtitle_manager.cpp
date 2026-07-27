@@ -64,6 +64,20 @@ void SubtitleManager::invalidateSubtitles(Window *targetWindow) {
 	_vm->_gfx->invalidateRect(getDefaultBoxBounds(), false);
 }
 
+void SubtitleManager::updateSubtitles(Window *targetWindow) {
+	if (!areSubtitlesEnabled()) {
+		return;
+	}
+
+	Window *windowToPaint = targetWindow ? targetWindow : _vm->_mainWindow;
+	if (!windowToPaint) {
+		return;
+	}
+
+	invalidateSubtitles(windowToPaint);
+	windowToPaint->onPaint();
+}
+
 void SubtitleManager::updateFont() {
 	int requestedSize = kDefaultSubtitleFontSize;
 	if (ConfMan.hasKey("subtitle_font_size")) {

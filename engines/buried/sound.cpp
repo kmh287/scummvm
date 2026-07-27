@@ -468,11 +468,33 @@ int SoundManager::playSoundEffect(const Common::Path &fileName, int volume, bool
 		_soundData[kEffectsIndexBase + effectChannel]->_flags = SOUND_FLAG_DESTROY_AFTER_COMPLETION;
 	_soundData[kEffectsIndexBase + effectChannel]->_soundType = Audio::Mixer::kSFXSoundType;
 
+	// Store normalized media ID for subtitle lookup
+	_sfxMediaId[effectChannel] = extractMediaIdFromPath(fileName);
+	_sfxStartTime[effectChannel] = g_system->getMillis();
+
 	// Play the file
 	_soundData[kEffectsIndexBase + effectChannel]->start();
 
 	// Return the index of the channel used
 	return effectChannel;
+}
+
+bool SoundManager::isSubtitledSFXPlaying() const {
+	for (int i = 0; i < 2; ++i) {
+		if (!_sfxMediaId[i].empty() && _soundData[kEffectsIndexBase + i]->isPlaying())
+			return true;
+	}
+	return false;
+}
+
+Common::String SoundManager::getSoundEffectMediaId(int channel) const {
+	if (channel < 0 || channel > 1) return "";
+	return _sfxMediaId[channel];
+}
+
+uint32 SoundManager::getSoundEffectPosition(int channel) const {
+	if (channel < 0 || channel > 1 || _sfxMediaId[channel].empty()) return 0;
+	return g_system->getMillis() - _sfxStartTime[channel];
 }
 
 uint32 SoundManager::getSyncSoundPosition() const {
@@ -765,6 +787,14 @@ void SoundManager::timerCallback() {
 					_soundData[i] = new Sound();
 				}
 			}
+		}
+	}
+
+	for (int channel = 0; channel < 2; ++channel) {
+		int idx = kEffectsIndexBase + channel;
+		if (!_sfxMediaId[channel].empty() && !_soundData[idx]->isPlaying()) {
+			_sfxMediaId[channel].clear();
+			_vm->_subtitles->invalidateSubtitles();
 		}
 	}
 }

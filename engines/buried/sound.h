@@ -98,6 +98,9 @@ public:
 	bool isSyncSoundPlaying() const { return !_syncSoundMediaId.empty(); }
 	Common::String getSyncSoundMediaId() const { return _syncSoundMediaId; }
 	uint32 getSyncSoundPosition() const;
+	bool isSubtitledSFXPlaying() const;
+	Common::String getSoundEffectMediaId(int channel) const;
+	uint32 getSoundEffectPosition(int channel) const;
 
 private:
 	enum {
@@ -161,6 +164,8 @@ private:
 	Common::String _currentAIVoiceMediaId;
 	Common::String _syncSoundMediaId;
 	uint32 _syncSoundStartTime;
+	Common::String _sfxMediaId[2];
+	uint32 _sfxStartTime[2];
 };
 
 } // End of namespace Buried

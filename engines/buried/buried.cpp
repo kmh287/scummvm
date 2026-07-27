@@ -466,6 +466,9 @@ void BuriedEngine::yield(VideoWindow *video, int soundId) {
 	if ((video || soundId >= 0) && _allowVideoSkip)
 		processAudioVideoSkipMessages(video, soundId);
 
+	if (_subtitles)
+		_subtitles->updateSubtitles();
+
 	_gfx->updateScreen();
 	_system->delayMillis(10);
 

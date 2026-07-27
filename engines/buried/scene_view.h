@@ -194,6 +194,7 @@ private:
 	bool _loopAsyncMovie;
 	bool _lastAIVoicePlaying;
 	bool _lastSyncSoundPlaying;
+	bool _lastSFXPlaying;
 
 	Common::Path _lastAICommentFileName;
 
