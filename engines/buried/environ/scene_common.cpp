@@ -658,8 +658,11 @@ int InteractiveNewsNetwork::movieCallback(Window *viewWindow, VideoWindow *movie
 }
 
 int InteractiveNewsNetwork::timerCallback(Window *viewWindow) {
-	// Check to see if audio has stopped
-	if (_playingAudio && _audioChannel != -1 && !_vm->_sound->isSoundEffectPlaying(_audioChannel)) {
+	if (_playingAudio && _vm->_subtitles->isSubtitledAudioPlaying()) {
+		// Add subtitles e.g. for voice over text of non-video content.
+		_vm->_subtitles->markSubtitlesDirty(viewWindow);
+	} else if (_playingAudio && _audioChannel != -1 && !_vm->_sound->isSoundEffectPlaying(_audioChannel)) {
+		// Audio was playing but now stopped.
 		_audioChannel = -1;
 		_playingAudio = false;
 		_vm->_subtitles->markSubtitlesDirty(viewWindow);

@@ -23,6 +23,7 @@
 #include "buried/buried.h"
 #include "buried/graphics.h"
 #include "buried/scene_view.h"
+#include "buried/sound.h"
 #include "buried/subtitle_manager.h"
 #include "buried/window.h"
 
@@ -235,6 +236,48 @@ bool SubtitleManager::renderSubtitleForMedia(Graphics::Surface *destSurface, con
 	}
 	renderSubtitle(destSurface, boxRect, *sub);
 	return true;
+}
+
+bool SubtitleManager::isSubtitledAudioPlaying() const {
+	SoundManager *sound = _vm->_sound;
+	if (!sound) {
+		return false;
+	}
+	return sound->isAIVoicePlaying() ||
+	       sound->isSyncSoundPlaying() ||
+	       sound->isInterfaceSoundPlaying() ||
+	       sound->isSubtitledSoundEffectPlaying();
+}
+
+bool SubtitleManager::renderSubtitlesForActiveAudio(Graphics::Surface *destSurface) {
+	if (!destSurface || !areSubtitlesEnabled()) {
+		return false;
+	}
+
+	SoundManager *sound = _vm->_sound;
+	if (!sound) {
+		return false;
+	}
+
+	if (sound->isAIVoicePlaying()) {
+		return renderSubtitleForMedia(destSurface, sound->getAIVoiceMediaId(), sound->getAIVoicePlaybackPositionMillis());
+	}
+	if (sound->isSyncSoundPlaying()) {
+		return renderSubtitleForMedia(destSurface, sound->getSyncSoundMediaId(), sound->getSyncSoundPlaybackPositionMillis());
+	}
+	if (sound->isInterfaceSoundPlaying()) {
+		return renderSubtitleForMedia(destSurface, sound->getInterfaceSoundMediaId(), sound->getInterfaceSoundPlaybackPositionMillis());
+	}
+	if (sound->isSubtitledSoundEffectPlaying()) {
+		return renderSubtitleForMedia(destSurface, sound->getSubtitledSoundEffectMediaId(), sound->getSubtitledSoundEffectPosition());
+	}
+
+	return false;
+}
+
+bool SubtitleManager::renderSubtitleForVideo(Graphics::Surface *destSurface, const Window *videoWindow, const Common::String &mediaId, uint32 currentMs, const Common::Rect &mediaRect) {
+	Common::Rect boxBounds = calculateBoxBoundsForVideo(videoWindow, mediaRect);
+	return renderSubtitleForMedia(destSurface, boxBounds, mediaId, currentMs);
 }
 
 static byte blendColorComponent(byte srcComp, byte targetComp, float alpha) {

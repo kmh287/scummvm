@@ -105,6 +105,16 @@ public:
 	// Returns true if a subtitle track exists for the specified ID and false otherwise.
 	bool hasSubtitleTrack(const Common::String &mediaId) const;
 
+	// Renders subtitles for whatever audio channel is currently playing subtitled media onto the destination surface.
+	bool renderSubtitlesForActiveAudio(Graphics::Surface *destSurface);
+
+	// Renders subtitles for the specified video window at the specified playback time onto the destination surface.
+	bool renderSubtitleForVideo(Graphics::Surface *destSurface, const Window *videoWindow, const Common::String &mediaId, uint32 currentMs, const Common::Rect &mediaRect);
+
+	// Returns true if any audio channel is currently playing subtitled media and false otherwise.
+	bool isSubtitledAudioPlaying() const;
+
+private:
 	// Renders subtitles for the specified media file at the specified playback time onto the destination surface at the
 	// default position. The default position is suitable for subtitles shown while main HUD (jumpsuit helmet interior) is shown.
 	bool renderSubtitleForMedia(Graphics::Surface *destSurface, const Common::String &mediaId, uint32 currentMs);
@@ -117,7 +127,6 @@ public:
 	// rectangle and be tall enough to render two lines of subtitle text.
 	Common::Rect calculateBoxBoundsForVideo(const Window *videoWindow, const Common::Rect &mediaRect);
 
-private:
 	// A single subtitle entry or "card".
 	struct SubtitleEntry {
 		// The start time of this subtitle in milliseconds since the beginning of the file.

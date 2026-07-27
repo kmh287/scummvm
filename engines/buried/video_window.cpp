@@ -227,31 +227,24 @@ void VideoWindow::onPaint() {
 
 		bool isPlayingNow = (_video && _video->isPlaying() && !_mediaId.empty());
 		if (isPlayingNow) {
-			Common::Rect videoSubBox = calculateSubtitleBounds();
-			_vm->_subtitles->renderSubtitleForMedia(_vm->_gfx->getScreen(), videoSubBox, _mediaId, _video->getTime());
+			Common::Rect videoFrameRect;
+			if (_srcRect.isEmpty() && _dstRect.isEmpty()) {
+				videoFrameRect = absoluteRect;
+			} else {
+				videoFrameRect = Common::Rect(
+					absoluteRect.left + _dstRect.left,
+					absoluteRect.top + _dstRect.top,
+					absoluteRect.left + _dstRect.right,
+					absoluteRect.top + _dstRect.bottom
+				);
+			}
+			_vm->_subtitles->renderSubtitleForVideo(_vm->_gfx->getScreen(), this, _mediaId, _video->getTime(), videoFrameRect);
 		} else if (_lastSubtitledPlaying && !isPlayingNow) {
 			// Video playback has stopped; invalidate parent window to clear subtitle overlay from screen
 			_vm->_subtitles->markSubtitlesDirty(getParent());
 		}
 		_lastSubtitledPlaying = isPlayingNow;
 	}
-}
-
-Common::Rect VideoWindow::calculateSubtitleBounds() const {
-	Common::Rect absoluteRect = getAbsoluteRect();
-	Common::Rect videoFrameRect;
-	if (_srcRect.isEmpty() && _dstRect.isEmpty()) {
-		videoFrameRect = absoluteRect;
-	} else {
-		videoFrameRect = Common::Rect(
-			absoluteRect.left + _dstRect.left,
-			absoluteRect.top + _dstRect.top,
-			absoluteRect.left + _dstRect.right,
-			absoluteRect.top + _dstRect.bottom
-		);
-	}
-
-	return _vm->_subtitles->calculateBoxBoundsForVideo(this, videoFrameRect);
 }
 
 void VideoWindow::onActionEnd(const Common::CustomEventType &action, uint flags) {

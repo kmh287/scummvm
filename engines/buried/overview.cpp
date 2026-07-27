@@ -113,11 +113,8 @@ void OverviewWindow::onPaint() {
 		}
 	}
 
-	if (_vm->_sound->isInterfaceSoundPlaying()) {
-		_vm->_subtitles->renderSubtitleForMedia(
-			_vm->_gfx->getScreen(),
-			_vm->_sound->getInterfaceSoundMediaId(),
-			_vm->_sound->getInterfaceSoundPlaybackPositionMillis());
+	if (_vm->_subtitles) {
+		_vm->_subtitles->renderSubtitlesForActiveAudio(_vm->_gfx->getScreen());
 	}
 }
 

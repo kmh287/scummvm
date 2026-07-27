@@ -2399,19 +2399,8 @@ void SceneViewWindow::onPaint() {
 		if (_useScenePaint)
 			_currentScene->gdiPaint(this);
 
-		// Subtitle Overlay Rendering:
-		// 1. Asynchronous AI Voice Comments (e.g. Arthur dialogue, hints, biochip voiceover)
-		// 2. Synchronous Sound Effects (e.g. INN sponsor clips, environment audio scenes)
-		// 3. Interface Sounds (e.g. tutorial / interface narration clips)
-		// 4. Subtitled Sound Effects (e.g. Arthur comms broadcasts like "GET OFF MY STATION")
-		if (_vm->_sound->isAIVoicePlaying()) {
-			_vm->_subtitles->renderSubtitleForMedia(_vm->_gfx->getScreen(), _vm->_sound->getAIVoiceMediaId(), _vm->_sound->getAIVoicePlaybackPositionMillis());
-		} else if (_vm->_sound->isSyncSoundPlaying()) {
-			_vm->_subtitles->renderSubtitleForMedia(_vm->_gfx->getScreen(), _vm->_sound->getSyncSoundMediaId(), _vm->_sound->getSyncSoundPlaybackPositionMillis());
-		} else if (_vm->_sound->isInterfaceSoundPlaying()) {
-			_vm->_subtitles->renderSubtitleForMedia(_vm->_gfx->getScreen(), _vm->_sound->getInterfaceSoundMediaId(), _vm->_sound->getInterfaceSoundPlaybackPositionMillis());
-		} else if (_vm->_sound->isSubtitledSoundEffectPlaying()) {
-			_vm->_subtitles->renderSubtitleForMedia(_vm->_gfx->getScreen(), _vm->_sound->getSubtitledSoundEffectMediaId(), _vm->_sound->getSubtitledSoundEffectPosition());
+		if (_vm->_subtitles) {
+			_vm->_subtitles->renderSubtitlesForActiveAudio(_vm->_gfx->getScreen());
 		}
 	}
 }
@@ -2441,10 +2430,7 @@ void SceneViewWindow::onTimer(uint timer) {
 	if (_currentScene && !_infoWindowDisplayed && !_bioChipWindowDisplayed && !_burnedLetterDisplayed)
 		_currentScene->timerCallback(this);
 
-	bool subtitledAudioPlaying = sound->isAIVoicePlaying() ||
-		sound->isSyncSoundPlaying() ||
-		sound->isSubtitledSoundEffectPlaying() ||
-		sound->isInterfaceSoundPlaying();
+	bool subtitledAudioPlaying = _vm->_subtitles->isSubtitledAudioPlaying();
 
 	// Subtitles need to be invalidated under three different circumstances:
 	// 1. Audio has begun playing and we need to show subtitles.
