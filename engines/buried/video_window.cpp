@@ -24,9 +24,7 @@
 #include "buried/subtitle_manager.h"
 #include "buried/video_window.h"
 
-#include "common/config-manager.h"
 #include "common/system.h"
-#include "common/keyboard.h"
 #include "graphics/surface.h"
 #include "video/avi_decoder.h"
 
@@ -81,16 +79,17 @@ bool VideoWindow::seekToFrame(int frame) {
 }
 
 void VideoWindow::stopVideo() {
-	if (_video) {
-		_vm->_gfx->toggleCursor(true);
-		_video->stop();
-		_mode = kModeStopped;
-		if (!_mediaId.empty()) {
-			_mediaId.clear();
-			if (_lastSubtitledPlaying) {
-				_lastSubtitledPlaying = false;
-				_vm->_subtitles->invalidateSubtitles(getParent());
-			}
+	if (!_video) {
+		return;
+	}
+	_vm->_gfx->toggleCursor(true);
+	_video->stop();
+	_mode = kModeStopped;
+	if (!_mediaId.empty()) {
+		_mediaId.clear();
+		if (_lastSubtitledPlaying) {
+			_lastSubtitledPlaying = false;
+			_vm->_subtitles->markSubtitlesDirty(getParent());
 		}
 	}
 }
@@ -114,6 +113,10 @@ bool VideoWindow::openVideo(const Common::Path &fileName) {
 
 	_video = new Video::AVIDecoder();
 	_mediaId = fileName.getLastComponent().toString();
+	if (_mediaId.contains(".")) {
+		_mediaId = _mediaId.substr(0, _mediaId.findLastOf('.'));
+	}
+	_mediaId.toUppercase();
 
 	if (!_video->loadFile(fileName)) {
 		closeVideo();
@@ -142,7 +145,7 @@ void VideoWindow::closeVideo() {
 	if (_video) {
 		if (_lastSubtitledPlaying) {
 			_lastSubtitledPlaying = false;
-			_vm->_subtitles->invalidateSubtitles(getParent());
+			_vm->_subtitles->markSubtitlesDirty(getParent());
 		}
 		_mediaId.clear();
 		delete _video;
@@ -193,8 +196,8 @@ void VideoWindow::updateVideo() {
 
 			// Invalidate the window so it gets updated
 			invalidateWindow(false);
-			if (_video->isPlaying() && !_mediaId.empty() && _vm->_subtitles) {
-				_vm->_subtitles->updateSubtitles(getParent());
+			if (_video->isPlaying() && !_mediaId.empty()) {
+				_vm->_subtitles->forceRepaintSubtitles(getParent());
 			}
 		}
 
@@ -206,7 +209,7 @@ void VideoWindow::updateVideo() {
 				_mediaId.clear();
 				if (_lastSubtitledPlaying) {
 					_lastSubtitledPlaying = false;
-					_vm->_subtitles->invalidateSubtitles(getParent());
+					_vm->_subtitles->markSubtitlesDirty(getParent());
 				}
 			}
 		}
@@ -228,7 +231,7 @@ void VideoWindow::onPaint() {
 			_vm->_subtitles->renderSubtitleForMedia(_vm->_gfx->getScreen(), videoSubBox, _mediaId, _video->getTime());
 		} else if (_lastSubtitledPlaying && !isPlayingNow) {
 			// Video playback has stopped; invalidate parent window to clear subtitle overlay from screen
-			_vm->_subtitles->invalidateSubtitles(getParent());
+			_vm->_subtitles->markSubtitlesDirty(getParent());
 		}
 		_lastSubtitledPlaying = isPlayingNow;
 	}
@@ -248,7 +251,7 @@ Common::Rect VideoWindow::calculateSubtitleBounds() const {
 		);
 	}
 
-	return _vm->_subtitles->calculateBoxBoundsForVideo(videoFrameRect);
+	return _vm->_subtitles->calculateBoxBoundsForVideo(this, videoFrameRect);
 }
 
 void VideoWindow::onActionEnd(const Common::CustomEventType &action, uint flags) {

@@ -22,6 +22,7 @@
 #include "buried/dialogs.h"
 #include "buried/buried.h"
 #include "buried/graphics.h"
+#include "buried/scene_view.h"
 #include "buried/subtitle_manager.h"
 #include "buried/window.h"
 
@@ -33,9 +34,22 @@
 
 namespace Buried {
 
+// Background color for the subtitle box.
+static constexpr ColorRGB kBoxBgColor = { 38, 12,12 };
+// Color for the subtitle box top border. (Muted-copper-orange)
+static constexpr ColorRGB kTopBorderColor = { 140,60, 35 };
+// Color for the subtitle box bottom border. (Bright orange)
+static constexpr ColorRGB kBottomBorderColor = { 237,109, 66 };
+// Color for the subtitle box side borders. (Muted dark red)
+static constexpr ColorRGB kSideBorderColor = { 105, 36, 28 };
+// Color for the speaker name text. (Neon orange)
+static constexpr ColorRGB kSpeakerTextColor = { 237, 109, 66 };
+// Color for the subtitle text, chosen to have high contrast with the background. (Cream amber)
+static constexpr ColorRGB kDialogTextColor = { 255, 230, 180 };
+
 SubtitleManager::SubtitleManager(BuriedEngine *vm) : _vm(vm), _font(nullptr), _fontBold(nullptr), _fontSize(0) {
 	updateFont();
-	loadSubtitlesDat();
+	loadSubtitlesData();
 }
 
 SubtitleManager::~SubtitleManager() {
@@ -43,11 +57,11 @@ SubtitleManager::~SubtitleManager() {
 	delete _fontBold;
 }
 
-bool SubtitleManager::areSubtitlesEnabled() const {
+bool SubtitleManager::areSubtitlesEnabled() {
 	return ConfMan.getBool("subtitles");
 }
 
-void SubtitleManager::invalidateSubtitles(Window *targetWindow) {
+void SubtitleManager::markSubtitlesDirty(Window *targetWindow) {
 	if (!areSubtitlesEnabled()) {
 		return;
 	}
@@ -65,7 +79,7 @@ void SubtitleManager::invalidateSubtitles(Window *targetWindow) {
 	_vm->_gfx->invalidateRect(getDefaultBoxBounds(), false);
 }
 
-void SubtitleManager::updateSubtitles(Window *targetWindow) {
+void SubtitleManager::forceRepaintSubtitles(Window *targetWindow) {
 	if (!areSubtitlesEnabled()) {
 		return;
 	}
@@ -75,7 +89,7 @@ void SubtitleManager::updateSubtitles(Window *targetWindow) {
 		return;
 	}
 
-	invalidateSubtitles(windowToPaint);
+	markSubtitlesDirty(windowToPaint);
 	windowToPaint->onPaint();
 }
 
@@ -94,58 +108,37 @@ void SubtitleManager::updateFont() {
 	}
 }
 
-static byte blendColorComponent(byte srcComp, byte targetComp, float alpha, float invAlpha) {
-	return (byte)(srcComp * invAlpha + targetComp * alpha);
+uint32 SubtitleManager::getColor(const ColorRGB &color) const {
+	return _vm->_gfx->getColor(color.r, color.g, color.b);
 }
 
-static void drawPixel(Graphics::Surface *destSurface, int x, int y, uint32 color) {
-	if (destSurface->format.bytesPerPixel == 2) {
-		uint16 *ptr = (uint16 *)destSurface->getBasePtr(x, y);
-		*ptr = (uint16)color;
-	} else if (destSurface->format.bytesPerPixel == 4) {
-		uint32 *ptr = (uint32 *)destSurface->getBasePtr(x, y);
-		*ptr = color;
-	} else {
-		byte *ptr = (byte *)destSurface->getBasePtr(x, y);
-		*ptr = (byte)color;
-	}
-}
-
-// ---------------------------------------------------------------------------
-// Loads binary subtitle package (buried_subtitles.dat).
+// Loads binary subtitle package (buried_subtitles.dat) and returns whether the load was successful.
 //
 // File Format Specification (Big-Endian):
 // 1. Magic Signature (4 bytes): 'BURS' (0x42555253)
-// 2. File Version (uint16): 1
-// 3. Track Count (uint16): N tracks
-// 4. TOC Table (N x 22 bytes):
+// 2. Track Count (uint16): N tracks
+// 3. TOC Table (N x 22 bytes):
 //    - Media ID (16 bytes): Fixed ASCII string (null-padded)
 //    - Payload Offset (uint32): Byte offset to track data
 //    - Card Count (uint16): M subtitle cards in track
-// 5. Track Payloads:
+// 4. Track Payloads:
 //    - Start Time (uint32): Start time in milliseconds
 //    - End Time (uint32): End time in milliseconds
 //    - Speaker Length (uint16): Speaker string length
 //    - Speaker String: UTF-8 speaker name
 //    - Text Length (uint16): Dialogue string length
 //    - Text String: UTF-8 dialogue text
-// ---------------------------------------------------------------------------
-bool SubtitleManager::loadSubtitlesDat() {
+bool SubtitleManager::loadSubtitlesData() {
 	Common::File file;
 	if (!file.open(Common::Path("buried_subtitles.dat"))) {
 		warning("[SubtitleManager] Could not open buried_subtitles.dat");
 		return false;
 	}
 
+	// Look for "Buried Subtitle" signature to skip trying to parse an errant or malformed file.
 	uint32 magic = file.readUint32BE();
 	if (magic != MKTAG('B', 'U', 'R', 'S')) {
 		warning("[SubtitleManager] Invalid magic in subtitles.dat: 0x%08X", magic);
-		return false;
-	}
-
-	uint16 version = file.readUint16BE();
-	if (version != 1) {
-		warning("[SubtitleManager] Unsupported subtitles.dat version: %d", version);
 		return false;
 	}
 
@@ -160,6 +153,7 @@ bool SubtitleManager::loadSubtitlesDat() {
 	Common::Array<TocEntry> toc;
 	toc.reserve(numTracks);
 
+	// Load the "table of contents" for the subtitles.
 	for (uint16 i = 0; i < numTracks; ++i) {
 		char mediaIdBuf[17];
 		file.read(mediaIdBuf, 16);
@@ -178,19 +172,19 @@ bool SubtitleManager::loadSubtitlesDat() {
 			SubtitleTrack track;
 			track.mediaId = tocEntry.mediaId;
 
-			for (uint16 c = 0; c < tocEntry.cardCount; ++c) {
+			for (uint16 cardInex = 0; cardInex < tocEntry.cardCount; ++cardInex) {
 				SubtitleEntry card;
 				card.startMs = file.readUint32BE();
 				card.endMs = file.readUint32BE();
 
-				uint16 spkLen = file.readUint16BE();
-				if (spkLen > 0) {
-					card.speaker = file.readString(0, spkLen);
+				uint16 speakerNameLength = file.readUint16BE();
+				if (speakerNameLength > 0) {
+					card.speaker = file.readString(0, speakerNameLength);
 				}
 
-				uint16 txtLen = file.readUint16BE();
-				if (txtLen > 0) {
-					card.text = file.readString(0, txtLen);
+				uint16 textLength = file.readUint16BE();
+				if (textLength > 0) {
+					card.text = file.readString(0, textLength);
 				}
 
 				track.entries.push_back(card);
@@ -200,31 +194,24 @@ bool SubtitleManager::loadSubtitlesDat() {
 		}
 	}
 
-	debug(1, "[SubtitleManager] Successfully loaded %u subtitle tracks from subtitles.dat", (uint)_loadedTracks.size());
 	return true;
 }
 
-static Common::String sanitizeMediaId(const Common::String &mediaId) {
-	Common::String sanitized = mediaId;
-	if (sanitized.contains(".")) {
-		size_t dotPos = sanitized.findLastOf('.');
-		sanitized = sanitized.substr(0, dotPos);
+bool SubtitleManager::hasSubtitleTrack(const Common::String &mediaId) const {
+	if (mediaId.empty()) {
+		return false;
 	}
-	sanitized.toUppercase();
-	return sanitized;
+	return _loadedTracks.contains(mediaId);
 }
 
-const SubtitleEntry *SubtitleManager::getSubtitleForTime(const Common::String &mediaId, uint32 currentMs) {
-	Common::String sanitized = sanitizeMediaId(mediaId);
-
-	if (!_loadedTracks.contains(sanitized)) {
+const SubtitleManager::SubtitleEntry *SubtitleManager::getSubtitleForTime(const Common::String &mediaId, uint32 currentMs) {
+	if (!_loadedTracks.contains(mediaId)) {
 		return nullptr;
 	}
 
-	// Linear search is O(M) over a small array (each track contains at most <= 20 subtitle entries)
-	const SubtitleTrack &track = _loadedTracks[sanitized];
-	for (size_t i = 0; i < track.entries.size(); ++i) {
-		const SubtitleEntry &entry = track.entries[i];
+	// Linear search is sufficient here -- tracks typically only have a few entries and none have more than 20.
+	const SubtitleTrack &track = _loadedTracks[mediaId];
+	for (const auto & entry : track.entries) {
 		if (currentMs >= entry.startMs && currentMs <= entry.endMs) {
 			return &entry;
 		}
@@ -234,16 +221,7 @@ const SubtitleEntry *SubtitleManager::getSubtitleForTime(const Common::String &m
 }
 
 bool SubtitleManager::renderSubtitleForMedia(Graphics::Surface *destSurface, const Common::String &mediaId, uint32 currentMs) {
-	if (!areSubtitlesEnabled()) {
-		return false;
-	}
-
-	const SubtitleEntry *sub = getSubtitleForTime(mediaId, currentMs);
-	if (!sub) {
-		return false;
-	}
-	renderSubtitle(destSurface, *sub);
-	return true;
+	return renderSubtitleForMedia(destSurface, getDefaultBoxBounds(), mediaId, currentMs);
 }
 
 bool SubtitleManager::renderSubtitleForMedia(Graphics::Surface *destSurface, const Common::Rect &boxRect, const Common::String &mediaId, uint32 currentMs) {
@@ -259,161 +237,215 @@ bool SubtitleManager::renderSubtitleForMedia(Graphics::Surface *destSurface, con
 	return true;
 }
 
-void SubtitleManager::renderSubtitle(Graphics::Surface *destSurface, const SubtitleEntry &entry) {
-	renderSubtitle(destSurface, getDefaultBoxBounds(), entry);
+static byte blendColorComponent(byte srcComp, byte targetComp, float alpha) {
+	return (byte)(srcComp * (1.0f - alpha) + targetComp * alpha);
+}
+
+static void drawPixel(Graphics::Surface *destSurface, int x, int y, uint32 color) {
+	if (destSurface->format.bytesPerPixel == 2) {
+		uint16 *ptr = (uint16 *)destSurface->getBasePtr(x, y);
+		*ptr = (uint16)color;
+	} else if (destSurface->format.bytesPerPixel == 4) {
+		uint32 *ptr = (uint32 *)destSurface->getBasePtr(x, y);
+		*ptr = color;
+	} else {
+		byte *ptr = (byte *)destSurface->getBasePtr(x, y);
+		*ptr = (byte)color;
+	}
+}
+
+// Blends the existing color at pixel (x,y) on destSurface with the target color.
+static void blendPixel(Graphics::Surface *destSurface, int x, int y, ColorRGB target, float alpha) {
+	if (destSurface->format.bytesPerPixel == 2) {
+		uint16 *ptr = (uint16 *)destSurface->getBasePtr(x, y);
+		byte r, g, b;
+		destSurface->format.colorToRGB(*ptr, r, g, b);
+		byte blendedR = blendColorComponent(r, target.r, alpha);
+		byte blendedG = blendColorComponent(g, target.g, alpha);
+		byte blendedB = blendColorComponent(b, target.b, alpha);
+		*ptr = destSurface->format.RGBToColor(blendedR, blendedG, blendedB);
+	} else if (destSurface->format.bytesPerPixel == 4) {
+		uint32 *ptr = (uint32 *)destSurface->getBasePtr(x, y);
+		byte r, g, b;
+		destSurface->format.colorToRGB(*ptr, r, g, b);
+		byte blendedR = blendColorComponent(r, target.r, alpha);
+		byte blendedG = blendColorComponent(g, target.g, alpha);
+		byte blendedB = blendColorComponent(b, target.b, alpha);
+		*ptr = destSurface->format.RGBToColor(blendedR, blendedG, blendedB);
+	} else {
+		drawPixel(destSurface, x, y, destSurface->format.RGBToColor(target.r, target.g, target.b));
+	}
 }
 
 void SubtitleManager::renderSubtitle(Graphics::Surface *destSurface, const Common::Rect &boxRect, const SubtitleEntry &entry) {
-	updateFont();
 	if (!destSurface || !_font || entry.text.empty()) {
 		return;
 	}
 
+	// Re-check fonts in case the user changed the setting while the game is running.
+	updateFont();
+
 	int fontHeight = _font->getFontHeight();
 
-	// Dark semi-transparent scrim background color
-	float alpha = kSubtitleBoxOpacity;
-	if (alpha < 0.0f) { alpha = 0.0f; }
-	if (alpha > 1.0f) { alpha = 1.0f; }
+	float alpha = CLIP<float>(kSubtitleBoxOpacity, 0.0f, 1.0f);
 
-	// -----------------------------------------------------------------------
 	// Render subtitle box scrim & bottom chamfered border.
 	//
-	// 1. Chamfer Cutouts: For the bottom 6 rows (distFromBottom < 6), inset the left and right
-	//    bounds by (6 - distFromBottom) * 2 pixels. This creates a 30-degree bevel angle
-	//    (2:1 horizontal-to-vertical slope ratio) matching the suit HUD.
+	// 1. Chamfer Cutouts: For the bottom rows (distFromBottom < kSubtitleChamferHeight), inset the left and right
+	//    bounds by (kSubtitleChamferHeight - distFromBottom) * 2 pixels. This applies a 2:1 horizontal-to-vertical
+	//    bevel slope (approx. 26.6° angle relative to horizontal) extending kSubtitleChamferHeight pixels vertically.
 	// 2. CRT Scanline Interlacing: Alternate row opacity (1.15x alpha on even rows,
 	//    0.85x alpha on odd rows) to simulate an interlaced glass CRT monitor.
-	// -----------------------------------------------------------------------
 	for (int y = boxRect.top; y < boxRect.bottom; ++y) {
-		if (y < 0 || y >= destSurface->h) { continue; }
-
-		int dy = y - boxRect.top;
-		int distFromBottom = (boxRect.bottom - 1) - y;
-		int inset = 0;
-		if (distFromBottom < 6) {
-			inset = (6 - distFromBottom) * 2; // 30-degree chamfer slope (2:1 horizontal-to-vertical ratio)
+		if (y < 0 || y >= destSurface->h) {
+			continue;
 		}
 
-		int startX = boxRect.left + inset;
-		int endX   = boxRect.right - inset;
+		int distanceFromTop = y - boxRect.top;
+		int distanceFromBottom = boxRect.bottom - 1 - y;
 
-		// CRT Scanline Raster: alternate line alpha for subtle interlaced CRT glass effect
-		float curAlpha = (dy % 2 == 0) ? (alpha * 1.15f) : (alpha * 0.85f);
-		if (curAlpha > 0.95f) { curAlpha = 0.95f; }
-		if (curAlpha < 0.20f) { curAlpha = 0.20f; }
-		float curInvAlpha = 1.0f - curAlpha;
+		// Insets for the chamfer drawn at the bottom of the box.
+		int boxHorizontalInset = 0;
+		if (distanceFromBottom < kSubtitleChamferHeight) {
+			boxHorizontalInset = (kSubtitleChamferHeight - distanceFromBottom) * 2; // 2:1 bevel slope (approx. 26.6° angle)
+		}
+
+		int startX = boxRect.left + boxHorizontalInset;
+		int endX = boxRect.right - boxHorizontalInset;
+
+		// CRT Scanline Raster: alternate line alpha for subtle interlaced CRT glass effect.
+		// The CRT effect is skipped if the alpha is ever configured to 1 as such a setting would indicate an intent to
+		// fully eliminate transparency on the subtitle pane.
+		float curAlpha = alpha;
+		if (alpha < 1.0f) {
+			curAlpha = distanceFromTop % 2 == 0 ? alpha * 1.15f : alpha * 0.85f;
+			curAlpha = CLIP<float>(curAlpha, 0.0f, 1.0f);
+		}
 
 		for (int x = startX; x < endX; ++x) {
-			if (x < 0 || x >= destSurface->w) { continue; }
+			if (x < 0 || x >= destSurface->w) {
+				continue;
+			}
 
-			// Border pixels: top line (muted copper-orange), bottom line (bright orange), side/diagonal edges (subtle dark red)
-			bool isTopBorder    = (y == boxRect.top);
-			bool isBottomBorder = (y == boxRect.bottom - 1);
-			bool isSideBorder   = (x == startX || x == endX - 1);
-			bool isBorderPixel  = isTopBorder || isBottomBorder || isSideBorder;
+			bool isTopBorder = y < boxRect.top + kSubtitleBorderWidth;
+			bool isBottomBorder = y >= boxRect.bottom - kSubtitleBorderWidth;
+			bool isSideBorder = x < startX + kSubtitleBorderWidth || x >= endX - kSubtitleBorderWidth;
 
-			if (isBorderPixel) {
-				uint32 curBorderColor = isTopBorder ? _vm->_gfx->getColor(140, 60, 35) : (isBottomBorder ? _vm->_gfx->getColor(237, 109, 66) : _vm->_gfx->getColor(105, 36, 28));
-				drawPixel(destSurface, x, y, curBorderColor);
+			if (isTopBorder) {
+				drawPixel(destSurface, x, y, getColor(kTopBorderColor));
+			} else if (isBottomBorder) {
+				drawPixel(destSurface, x, y, getColor(kBottomBorderColor));
+			} else if (isSideBorder) {
+				drawPixel(destSurface, x, y, getColor(kSideBorderColor));
 			} else {
-				if (destSurface->format.bytesPerPixel == 2) {
-					uint16 *ptr = (uint16 *)destSurface->getBasePtr(x, y);
-					byte r, g, b;
-					destSurface->format.colorToRGB(*ptr, r, g, b);
-					byte blendedR = blendColorComponent(r, 38, curAlpha, curInvAlpha);
-					byte blendedG = blendColorComponent(g, 12, curAlpha, curInvAlpha);
-					byte blendedB = blendColorComponent(b, 12, curAlpha, curInvAlpha);
-					*ptr = destSurface->format.RGBToColor(blendedR, blendedG, blendedB);
-				} else if (destSurface->format.bytesPerPixel == 4) {
-					uint32 *ptr = (uint32 *)destSurface->getBasePtr(x, y);
-					byte r, g, b;
-					destSurface->format.colorToRGB(*ptr, r, g, b);
-					byte blendedR = blendColorComponent(r, 38, curAlpha, curInvAlpha);
-					byte blendedG = blendColorComponent(g, 12, curAlpha, curInvAlpha);
-					byte blendedB = blendColorComponent(b, 12, curAlpha, curInvAlpha);
-					*ptr = destSurface->format.RGBToColor(blendedR, blendedG, blendedB);
-				} else {
-					drawPixel(destSurface, x, y, _vm->_gfx->getColor(38, 12, 12));
-				}
+				blendPixel(destSurface, x, y, kBoxBgColor, curAlpha);
 			}
 		}
 	}
 
-	// Glowing HUD Neon Orange/Amber color for speaker name, Cream-Amber color for dialogue text
-	uint32 orangeColor = _vm->_gfx->getColor(237, 109, 66);
-	uint32 dialogueColor = _vm->_gfx->getColor(255, 230, 180);
+	uint32 speakerColor = getColor(kSpeakerTextColor);
+	uint32 dialogColor = getColor(kDialogTextColor);
 
-	const int kPadX = 8;  // horizontal inner padding
-	const int kPadY = kSubtitlePadY;  // vertical inner padding
-	const int innerW  = boxRect.width() - kPadX * 2;
-	const int innerX  = boxRect.left + kPadX;
-	int curY = boxRect.top + kPadY;
+	constexpr int paddingX = kSubtitlePadX;
+	constexpr int paddingY = kSubtitlePadY;
+	const int interiorWidth  = boxRect.width() - paddingX * 2;
+	const int innerX  = boxRect.left + paddingX;
+	const int innerY = boxRect.top + paddingY;
+
+	int curX = innerX;
+	int curY = innerY;
 
 	// Build speaker prefix (e.g. "Arthur: ")
-	Common::String speakerPrefix = entry.speaker.empty() ? "" : (entry.speaker + ": ");
-	int speakerW = speakerPrefix.empty() ? 0 : _fontBold->getStringWidth(speakerPrefix);
+	const Common::String speakerPrefix = entry.speaker.empty() ? "" : (entry.speaker + ": ");
+	int speakerWidth = speakerPrefix.empty() ? 0 : _fontBold->getStringWidth(speakerPrefix);
 
-	// Word-wrap text across up to 2 lines
-	int line1AvailW = innerW - speakerW;
-	Common::Array<Common::String> lines = wrapText(entry.text, line1AvailW, innerW);
+	// Word-wrap text across up to kMaxSubtitleLines lines. The first line loses some space for the speaker name.
+	// Subsequent lines get the full width.
+	int line1TextWidth = interiorWidth - speakerWidth;
+	int line2TextWidth = interiorWidth;
+	Common::Array<Common::String> lines = wrapText(entry.text, line1TextWidth, line2TextWidth);
 
-	// Draw line 1: speaker prefix (bold orange) + first line of dialogue (cream-amber)
-	if (!lines.empty()) {
-		int drawX = innerX;
-		if (!speakerPrefix.empty()) {
-			_fontBold->drawString(destSurface, speakerPrefix, drawX, curY, innerW, orangeColor, Graphics::kTextAlignLeft);
-			drawX += speakerW;
+	// Draw wrapped text lines
+	for (size_t i = 0; i < lines.size() && i < (size_t)kMaxSubtitleLines; i++) {
+		if (i == 0) {
+			// Special handling to draw the speaker name on the first line.
+			if (!speakerPrefix.empty()) {
+				_fontBold->drawString(destSurface, speakerPrefix, curX, curY, interiorWidth, speakerColor, Graphics::kTextAlignLeft);
+				curX += speakerWidth;
+			}
+			if (line1TextWidth > 0 && !lines[0].empty()) {
+				_font->drawString(destSurface, lines[0], curX, curY, line1TextWidth, dialogColor, Graphics::kTextAlignLeft);
+			}
+		} else {
+			// Remaining lines only have dialog text.
+			if (!lines[i].empty()) {
+				_font->drawString(destSurface, lines[i], curX, curY, interiorWidth, dialogColor, Graphics::kTextAlignLeft);
+			}
 		}
-		int line1AvailWActual = boxRect.right - kPadX - drawX;
-		if (line1AvailWActual > 0)
-			_font->drawString(destSurface, lines[0], drawX, curY, line1AvailWActual, dialogueColor, Graphics::kTextAlignLeft);
-		curY += fontHeight;
+		curX = innerX;
+		curY += fontHeight + kSubtitleInterlineSpacing;
 	}
 
-	// Draw line 2 (if present): dialogue continues (cream-amber)
-	if (lines.size() >= 2 && curY + fontHeight <= boxRect.bottom) {
-		_font->drawString(destSurface, lines[1], innerX, curY, innerW, dialogueColor, Graphics::kTextAlignLeft);
-	}
-
-	_vm->_gfx->invalidateRect(boxRect, false);
+	_vm->_gfx->invalidateRect(boxRect, /* erase= */ false);
 }
 
-Common::Array<Common::String> SubtitleManager::wrapText(const Common::String &text, int line1AvailW, int line2AvailW) {
+Common::Array<Common::String> SubtitleManager::wrapText(
+	const Common::String &text,
+	int line1AvailableTextWidth,
+	int line2AvailableTextWidth
+) {
 	Common::Array<Common::String> lines;
 	Common::String remaining = text;
 	bool firstLine = true;
 
-	while (!remaining.empty() && lines.size() < 2) {
-		int availW = firstLine ? line1AvailW : line2AvailW;
-		if (availW <= 0) {
+	while (!remaining.empty() && (int)lines.size() < kMaxSubtitleLines) {
+		int availableWidth = firstLine ? line1AvailableTextWidth : line2AvailableTextWidth;
+		// We've run out of space on line 1. Move to the next line!
+		if (availableWidth <= 0) {
 			firstLine = false;
-			availW = line2AvailW;
+			availableWidth = line2AvailableTextWidth;
 		}
 
 		Common::String fittingLine;
 		Common::String rest = remaining;
 
+		// Move one word at a time, measuring the line length as words are progressively added to the line.
+		// Break out and proceed to the next line as soon as a word would make the line too long.
+		//
+		// This will need to be re-worked or augmented if the game is localized to languages like Chinese
+		// that do not use spaces as word boundaries.
 		while (!rest.empty()) {
 			uint nextSpace = 0;
-			while (nextSpace < rest.size() && rest[nextSpace] != ' ')
-				++nextSpace;
+			while (nextSpace < rest.size() && rest[nextSpace] != ' ') {
+				nextSpace++;
+			}
 			Common::String word = rest.substr(0, nextSpace);
-
 			Common::String candidate = fittingLine.empty() ? word : (fittingLine + " " + word);
 
-			if (_font->getStringWidth(candidate) <= availW) {
+			if (_font->getStringWidth(candidate) <= availableWidth) {
+				// The word fits. Keep going!
 				fittingLine = candidate;
-				rest = (nextSpace < rest.size()) ? rest.substr(nextSpace + 1) : "";
+				rest = nextSpace < rest.size() ? rest.substr(nextSpace + 1) : "";
 			} else {
+				// The line would be too long if we add this word. Put it on the next line!
 				if (fittingLine.empty()) {
+					// If we are on line 1 (which has reduced width due to speaker name), check if the word
+					// would fit on line 2 (which has full width) before forcing it to overflow line 1.
+					if (firstLine && _font->getStringWidth(word) <= line2AvailableTextWidth) {
+						// The word will fit on line 2.
+						break;
+					}
+
+					// The word won't fit on any line. Avoid an infinite loop by drawing it on the current line, even
+					// though it will overflow.
 					fittingLine = word;
-					rest = (nextSpace < rest.size()) ? rest.substr(nextSpace + 1) : "";
+					rest = nextSpace < rest.size() ? rest.substr(nextSpace + 1) : "";
 				}
 				break;
 			}
 		}
 
+		// Line complete. Add it to the array and keep going.
 		lines.push_back(fittingLine);
 		remaining = rest;
 		firstLine = false;
@@ -422,27 +454,49 @@ Common::Array<Common::String> SubtitleManager::wrapText(const Common::String &te
 	return lines;
 }
 
-int SubtitleManager::getFontHeight() {
-	updateFont();
-	return _font ? _font->getFontHeight() : 14;
+int SubtitleManager::getFontHeight() const {
+	return _font->getFontHeight();
 }
 
-int SubtitleManager::getBoxHeight() {
-	return (getFontHeight() * 2) + (kSubtitlePadY * 2) + 10;
+int SubtitleManager::getBoxHeight() const {
+	int maxTextHeight = getFontHeight() * kMaxSubtitleLines;
+	int interLineSpacingHeight = kSubtitleInterlineSpacing * (kMaxSubtitleLines - 1);
+	int paddingHeight = kSubtitlePadY * 2;
+	int borderHeight = kSubtitleBorderWidth * 2;
+	return maxTextHeight + interLineSpacingHeight + paddingHeight + borderHeight + kSubtitleChamferHeight;
 }
 
 Common::Rect SubtitleManager::getDefaultBoxBounds() {
 	int boxHeight = getBoxHeight();
-	return Common::Rect(kSubtitleBoxX, kSubtitleViewportTop, kSubtitleBoxX + kSubtitleBoxWidth, kSubtitleViewportTop + boxHeight);
+	return {
+		kSubtitleBoxX,
+		kSubtitleBoxY,
+		kSubtitleBoxX + kSubtitleBoxWidth,
+		(int16) (kSubtitleBoxY + boxHeight) };
 }
 
-Common::Rect SubtitleManager::calculateBoxBoundsForVideo(const Common::Rect &videoFrameRect) {
+Common::Rect SubtitleManager::calculateBoxBoundsForVideo(const Window *videoWindow, const Common::Rect &mediaRect) {
+	// The behavior is bifurcated for videos that play in the Jumpsuit view (like INN) and videos that play over
+	// a blank screen like the intro and finale videos. These videos do not play in the same screen location.
+	// For Jumpsuit videos, we want the subtitle box to align with where it is for non-video media.
+	bool isJumpsuitVideo = false;
+	for (const Window *w = videoWindow->getParent(); w != nullptr; w = w->getParent()) {
+		if (dynamic_cast<const SceneViewWindow *>(w)) {
+			isJumpsuitVideo = true;
+			break;
+		}
+	}
+
+	if (isJumpsuitVideo) {
+		return getDefaultBoxBounds();
+	}
+
 	int boxHeight = getBoxHeight();
 	return Common::Rect(
-		videoFrameRect.left - 16,
-		videoFrameRect.bottom,
-		videoFrameRect.right + 12,
-		videoFrameRect.bottom + boxHeight
+		mediaRect.left,
+		mediaRect.bottom,
+		mediaRect.right,
+		mediaRect.bottom + boxHeight
 	);
 }
 

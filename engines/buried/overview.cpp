@@ -117,7 +117,7 @@ void OverviewWindow::onPaint() {
 		_vm->_subtitles->renderSubtitleForMedia(
 			_vm->_gfx->getScreen(),
 			_vm->_sound->getInterfaceSoundMediaId(),
-			_vm->_sound->getInterfaceSoundPosition());
+			_vm->_sound->getInterfaceSoundPlaybackPositionMillis());
 	}
 }
 
@@ -142,7 +142,7 @@ void OverviewWindow::onTimer(uint timer) {
 	_vm->_sound->timerCallback();
 
 	if (_currentStatus > kOverviewStateUnstarted && _vm->_sound->isInterfaceSoundPlaying()) {
-		_vm->_subtitles->invalidateSubtitles(this);
+		_vm->_subtitles->markSubtitlesDirty(this);
 		return;
 	}
 

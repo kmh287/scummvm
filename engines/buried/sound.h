@@ -61,8 +61,13 @@ public:
 	bool playAsynchronousAIComment(const Common::Path &fileName);
 	bool isAsynchronousAICommentPlaying();
 	void stopAsynchronousAIComment();
+	// Returns true if an AI voice file is playing and false otherwise.
 	bool isAIVoicePlaying();
-	uint32 getAIVoicePosition();
+	// Returns the playback position in milliseconds of the currently-playing AI voice sound or 0 if no AI voice
+	// sound is currently playing.
+	uint32 getAIVoicePlaybackPositionMillis();
+	// Returns the media ID of the currently-playing AI voice sound or the empty string if no AI voice sound is
+	// currently playing.
 	Common::String getAIVoiceMediaId();
 
 	// SOUND EFFECTS FUNCTIONS
@@ -71,12 +76,26 @@ public:
 	bool stopSoundEffect(int effectID);
 	bool isSoundEffectPlaying (int effectID);
 	bool adjustSoundEffectSoundVolume(int effectID, byte newVolumeLevel, bool fade, byte steps, uint32 fadeLength);
+	// Returns true if a subtitled sound effect is currently playing or false otherwise.
+	bool isSubtitledSoundEffectPlaying() const;
+	// Returns the media ID of the active subtitled sound effect, or the empty String if no subtitled sound effects
+	// are currently playing. If multiple subtitled sound effects are playing at once, the one with the lowest
+	// channel ID will be chosen.
+	Common::String getSubtitledSoundEffectMediaId() const;
+	// Returns the playback position in milliseconds of the active subtitled sound effect, or 0 if no subtitled sound
+	// effects are currently playing. If multiple subtitled sound effects are playing at once, the one with the lowest
+	// channel ID will be chosen.
+	uint32 getSubtitledSoundEffectPosition() const;
 
 	// Interface sound functions
 	bool playInterfaceSound(const Common::Path &fileName);
 	bool stopInterfaceSound();
 	bool isInterfaceSoundPlaying();
-	uint32 getInterfaceSoundPosition();
+	// Returns the playback position in milliseconds of the currently-playing interface sound or 0 if no interface
+	// sound is currently playing.
+	uint32 getInterfaceSoundPlaybackPositionMillis();
+	// Returns the media ID of the currently-playing interface sound or the empty string if no interface sound is
+	// currently playing.
 	Common::String getInterfaceSoundMediaId() const;
 
 	// START AND STOP SPECIFIED FOOTSTEPS SOUND
@@ -98,10 +117,8 @@ public:
 
 	bool isSyncSoundPlaying() const { return !_syncSoundMediaId.empty(); }
 	Common::String getSyncSoundMediaId() const { return _syncSoundMediaId; }
-	uint32 getSyncSoundPosition() const;
-	bool isSubtitledSFXPlaying() const;
-	Common::String getSoundEffectMediaId(int channel) const;
-	uint32 getSoundEffectPosition(int channel) const;
+	uint32 getSyncSoundPosition() const { return getSyncSoundPlaybackPositionMillis(); }
+	uint32 getSyncSoundPlaybackPositionMillis() const;
 
 private:
 	enum {
@@ -165,7 +182,9 @@ private:
 	Common::String _currentAIVoiceMediaId;
 	Common::String _syncSoundMediaId;
 	uint32 _syncSoundStartTime;
+	// Media IDs for currently-playing sound effects.
 	Common::String _sfxMediaId[2];
+	// Start time, in milliseconds, for currently-playing sound effects.
 	uint32 _sfxStartTime[2];
 	Common::String _interfaceMediaId;
 };

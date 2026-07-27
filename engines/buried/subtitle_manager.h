@@ -24,7 +24,6 @@
 
 #include "common/array.h"
 #include "common/hashmap.h"
-#include "common/hash-str.h"
 #include "common/str.h"
 #include "common/rect.h"
 
@@ -38,26 +37,6 @@ namespace Buried {
 class BuriedEngine;
 class Window;
 
-// A single subtitle entry or "card".
-struct SubtitleEntry {
-	// The start time of this subtitle in milliseconds since the beginning of the file.
-	uint32 startMs;
-	// The end time of this subtitle in milliseconds since the beginning of the file.
-	uint32 endMs;
-	// The character who speaks the subtitled line of dialog.
-	Common::String speaker;
-	// The text spoken for the subtitled line of dialog.
-	Common::String text;
-};
-
-// A subtitle track for an audio or video file, containing multiple entries or "cards".
-struct SubtitleTrack {
-	// The identifier for the audio or video file to which this track is associated.
-	Common::String mediaId;
-	// The subtitle entries, sorted by their start times.
-	Common::Array<SubtitleEntry> entries;
-};
-
 // Subtitle Box Layout Constants
 // Controls position, width, and height of the subtitle overlay box.
 // The subtitle box is designed to appear below the jumpsuit's viewport, spanning from one end of the window to the other
@@ -69,49 +48,123 @@ struct SubtitleTrack {
 // The X coordinate of the subtitle box's top-left edge.
 static constexpr int kSubtitleBoxX = 46;
 // The Y coordinate of the subtitle box's top-left edge.
-static constexpr int kSubtitleViewportTop = 319;
+static constexpr int kSubtitleBoxY = 319;
 // The width of the subtitle box.
 static constexpr int kSubtitleBoxWidth = 462;
 // The opacity of the subtitle box. 0f would be fully transparent. 1f would be fully opaque.
 static constexpr float kSubtitleBoxOpacity = 0.75f;
+// Horizontal padding of the interior of the subtitle box.
+static constexpr int kSubtitlePadX = 8;
 // Additional vertical padding of the interior of the subtitle box. This is added additionally to space reserved
 // for font ascenders, descenders, and the angled chamfer section at the bottom of the subtitle box.
-static constexpr int  kSubtitlePadY = 2;
+static constexpr int kSubtitlePadY = 2;
+// Maximum number of wrapped dialogue lines displayed in the subtitle box.
+// Drives total text height in getBoxHeight() and loop iterations in wrapText() and renderSubtitle().
+static constexpr int kMaxSubtitleLines = 2;
+
+// Height in pixels of the angled chamfer bevel at the bottom of the subtitle box.
+// The bevel is rendered at a 2:1 horizontal-to-vertical slope ratio.
+// This constant controls the vertical span of the cutouts; the maximum horizontal inset at the bottom-most row is
+// derived as (kSubtitleChamferHeight * 2) pixels.
+static constexpr int kSubtitleChamferHeight = 6;
+
+// Border stroke thickness in pixels for the top, bottom, and side frame edges.
+static constexpr int kSubtitleBorderWidth = 1;
+
+// Vertical spacing in pixels between consecutive lines of wrapped text.
+static constexpr int kSubtitleInterlineSpacing = 2;
+
+struct ColorRGB {
+	// The red component of a color in [0,255].
+	byte r;
+	// The green component of a color in [0,255].
+	byte g;
+	// The blue component of a color in [0,255].
+	byte b;
+};
 
 class SubtitleManager {
 public:
 	SubtitleManager(BuriedEngine *vm);
 	~SubtitleManager();
 
-	bool areSubtitlesEnabled() const;
-	void invalidateSubtitles(Window *targetWindow = nullptr);
-	void updateSubtitles(Window *targetWindow = nullptr);
+	// Returns true if subtitles are enabled and false otherwise.
+	static bool areSubtitlesEnabled();
 
-	bool loadSubtitlesDat();
-	const SubtitleEntry *getSubtitleForTime(const Common::String &mediaId, uint32 currentMs);
+	// Marks the subtitle region of the target window dirty without redrawing it, allowing it to be re-rendered as part
+	// of the next frame.
+	void markSubtitlesDirty(Window *targetWindow = nullptr);
 
-	void renderSubtitle(Graphics::Surface *destSurface, const SubtitleEntry &entry);
-	void renderSubtitle(Graphics::Surface *destSurface, const Common::Rect &boxRect, const SubtitleEntry &entry);
+	// Forces the subtitle region of the target window to re-draw immediately. This is necessary for synchronous flows
+	// where UI control is "yielded" to play a synchronous effect e.g. some of Arthur's dialog at the Farnstein lab.
+	void forceRepaintSubtitles(Window *targetWindow = nullptr);
 
+	// Loads subtitles track and timing file and returns whether subtitles loaded successfully.
+	bool loadSubtitlesData();
+
+	// Returns true if a subtitle track exists for the specified ID and false otherwise.
+	bool hasSubtitleTrack(const Common::String &mediaId) const;
+
+	// Renders subtitles for the specified media file at the specified playback time onto the destination surface at the
+	// default position. The default position is suitable for subtitles shown while main HUD (jumpsuit helmet interior) is shown.
 	bool renderSubtitleForMedia(Graphics::Surface *destSurface, const Common::String &mediaId, uint32 currentMs);
+
+	// Renders subtitles for the specified media file at the specified playback time onto the destination surface at the
+	// specified position.
 	bool renderSubtitleForMedia(Graphics::Surface *destSurface, const Common::Rect &boxRect, const Common::String &mediaId, uint32 currentMs);
-	
-	int getFontHeight();
-	int getBoxHeight();
-	Common::Rect getDefaultBoxBounds();
-	Common::Rect calculateBoxBoundsForVideo(const Common::Rect &videoFrameRect);
+
+	// Returns a rectangle to show subtitles beneath media showing within the specified rectangle. The box will match the width of the
+	// rectangle and be tall enough to render two lines of subtitle text.
+	Common::Rect calculateBoxBoundsForVideo(const Window *videoWindow, const Common::Rect &mediaRect);
 
 private:
+	// A single subtitle entry or "card".
+	struct SubtitleEntry {
+		// The start time of this subtitle in milliseconds since the beginning of the file.
+		uint32 startMs;
+		// The end time of this subtitle in milliseconds since the beginning of the file.
+		uint32 endMs;
+		// The character who speaks the subtitled line of dialog.
+		Common::String speaker;
+		// The text spoken for the subtitled line of dialog.
+		Common::String text;
+	};
+
+	// A subtitle track for an audio or video file, containing multiple entries or "cards".
+	struct SubtitleTrack {
+		// The identifier for the audio or video file to which this track is associated.
+		Common::String mediaId;
+		// The subtitle entries, sorted by their start times.
+		Common::Array<SubtitleEntry> entries;
+	};
+
 	BuriedEngine *_vm;
 	Common::HashMap<Common::String, SubtitleTrack> _loadedTracks;
 	Graphics::Font *_font;
 	Graphics::Font *_fontBold;
 	int _fontSize;
 
-	void updateFont();
-	Common::Array<Common::String> wrapText(const Common::String &text, int line1AvailW, int line2AvailW);
-};
+	// Returns the SubtitleEntry for the specified media file and playback time or null if no entry exists.
+	const SubtitleEntry *getSubtitleForTime(const Common::String &mediaId, uint32 currentMs);
 
+	// Renders the specified SubtitleEntry onto the destination surface at the specified position.
+	void renderSubtitle(Graphics::Surface *destSurface, const Common::Rect &boxRect, const SubtitleEntry &entry);
+
+	// Returns the subtitle font height in pixels.
+	int getFontHeight() const;
+
+	// Returns the height of the subtitle box, in pixels.
+	int getBoxHeight() const;
+
+	// Returns the rectangle for the default subtitle position. The default position is suitable for subtitles shown while main HUD (jumpsuit
+	// helmet interior) is shown.
+	Common::Rect getDefaultBoxBounds();
+
+	void updateFont();
+	Common::Array<Common::String> wrapText(const Common::String &text, int line1AvailableTextWidth, int line2AvailableTextWidth);
+
+	uint32 getColor(const ColorRGB &color) const;
+};
 } // End of namespace Buried
 
 #endif

@@ -650,7 +650,7 @@ int InteractiveNewsNetwork::movieCallback(Window *viewWindow, VideoWindow *movie
 	if (animationID == -1 && status == MOVIE_STOPPED) {
 		_vm->_sound->restart();
 		// Remove any lingering subtitle card from the clip.
-		_vm->_subtitles->invalidateSubtitles(viewWindow);
+		_vm->_subtitles->markSubtitlesDirty(viewWindow);
 		return SC_FALSE;
 	}
 
@@ -662,7 +662,7 @@ int InteractiveNewsNetwork::timerCallback(Window *viewWindow) {
 	if (_playingAudio && _audioChannel != -1 && !_vm->_sound->isSoundEffectPlaying(_audioChannel)) {
 		_audioChannel = -1;
 		_playingAudio = false;
-		_vm->_subtitles->invalidateSubtitles(viewWindow);
+		_vm->_subtitles->markSubtitlesDirty(viewWindow);
 	}
 
 	return SC_TRUE;
