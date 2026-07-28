@@ -37,12 +37,11 @@
 #include "buried/video_window.h"
 #include "buried/environ/scene_base.h"
 
-#include "common/config-manager.h"
+#include "buried/subtitle_manager.h"
 #include "common/ptr.h"
 #include "common/stream.h"
 #include "common/system.h"
 #include "graphics/surface.h"
-#include "buried/subtitle_manager.h"
 
 namespace Buried {
 
