@@ -2399,9 +2399,7 @@ void SceneViewWindow::onPaint() {
 		if (_useScenePaint)
 			_currentScene->gdiPaint(this);
 
-		if (_vm->_subtitles) {
-			_vm->_subtitles->renderSubtitlesForActiveAudio(_vm->_gfx->getScreen());
-		}
+		_vm->_subtitles->renderSubtitlesForActiveAudio(_vm->_gfx->getScreen());
 	}
 }
 
@@ -2434,7 +2432,7 @@ void SceneViewWindow::onTimer(uint timer) {
 
 	// Subtitles need to be invalidated under three different circumstances:
 	// 1. Audio has begun playing and we need to show subtitles.
-	// 2. Audio was playing with subtitles and now we need ot hide subtitles.
+	// 2. Audio was playing with subtitles and now we need to hide subtitles.
 	// 3. Audio playback is ongoing, but we need to change from one subtitle card to another.
 	// Due to the last condition, checking simply for a change in playback state is insufficient since we may need
 	// to redraw the subtitles even while audio playback is ongoing.

@@ -113,9 +113,7 @@ void OverviewWindow::onPaint() {
 		}
 	}
 
-	if (_vm->_subtitles) {
-		_vm->_subtitles->renderSubtitlesForActiveAudio(_vm->_gfx->getScreen());
-	}
+	_vm->_subtitles->renderSubtitlesForActiveAudio(_vm->_gfx->getScreen());
 }
 
 bool OverviewWindow::onEraseBackground() {
@@ -138,7 +136,9 @@ void OverviewWindow::onActionEnd(const Common::CustomEventType &action, uint fla
 void OverviewWindow::onTimer(uint timer) {
 	_vm->_sound->timerCallback();
 
+	// Is audio still playing or should we advance to the next state?
 	if (_currentStatus > kOverviewStateUnstarted && _vm->_sound->isInterfaceSoundPlaying()) {
+		// Audio is still playing for the current state. Ensure subtitles are fresh.
 		_vm->_subtitles->markSubtitlesDirty(this);
 		return;
 	}
