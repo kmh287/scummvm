@@ -259,11 +259,11 @@ bool SubtitleManager::renderSubtitlesForActiveAudio(Graphics::Surface *destSurfa
 		return false;
 	}
 
-	if (sound->isAIVoicePlaying()) {
-		return renderSubtitleForMedia(destSurface, sound->getAIVoiceMediaId(), sound->getAIVoicePlaybackPositionMillis());
-	}
 	if (sound->isSyncSoundPlaying()) {
 		return renderSubtitleForMedia(destSurface, sound->getSyncSoundMediaId(), sound->getSyncSoundPlaybackPositionMillis());
+	}
+	if (sound->isAIVoicePlaying()) {
+		return renderSubtitleForMedia(destSurface, sound->getAIVoiceMediaId(), sound->getAIVoicePlaybackPositionMillis());
 	}
 	if (sound->isInterfaceSoundPlaying()) {
 		return renderSubtitleForMedia(destSurface, sound->getInterfaceSoundMediaId(), sound->getInterfaceSoundPlaybackPositionMillis());

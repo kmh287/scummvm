@@ -110,9 +110,7 @@ void CompletionWindow::onPaint() {
 		_vm->_gfx->renderText(_vm->_gfx->getScreen(), _textFontB, _agentEvaluation->_scoringTextFinalScore, finalScoreRect.left, finalScoreRect.top, finalScoreRect.width(), finalScoreRect.height(), textColor, _fontHeightB, kTextAlignRight);
 	}
 
-	if (_vm->_subtitles) {
-		_vm->_subtitles->renderSubtitlesForActiveAudio(_vm->_gfx->getScreen());
-	}
+	_vm->_subtitles->renderSubtitlesForActiveAudio(_vm->_gfx->getScreen());
 }
 
 bool CompletionWindow::onEraseBackground() {
