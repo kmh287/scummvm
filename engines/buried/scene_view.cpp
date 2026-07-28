@@ -34,10 +34,10 @@
 #include "buried/resources.h"
 #include "buried/scene_view.h"
 #include "buried/sound.h"
+#include "buried/subtitle_manager.h"
 #include "buried/video_window.h"
 #include "buried/environ/scene_base.h"
 
-#include "buried/subtitle_manager.h"
 #include "common/ptr.h"
 #include "common/stream.h"
 #include "common/system.h"

@@ -22,9 +22,9 @@
  *
  */
 
-#include "buried/complete.h"
 #include "buried/agent_evaluation.h"
 #include "buried/buried.h"
+#include "buried/complete.h"
 #include "buried/frame_window.h"
 #include "buried/graphics.h"
 #include "buried/sound.h"
