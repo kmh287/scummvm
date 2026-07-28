@@ -143,6 +143,8 @@ public:
 	Window *_focusedWindow;
 	Window *_captureWindow;
 
+	Window *getTopWindow() const { return _focusedWindow ? _focusedWindow : _mainWindow; }
+
 	// Timers
 	uint createTimer(Window *window, uint period);
 	bool killTimer(uint timer);

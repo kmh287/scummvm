@@ -119,9 +119,7 @@ bool CompletionWindow::onEraseBackground() {
 }
 
 void CompletionWindow::onTimer(uint timer) {
-	if (_status == 1 && _vm->_subtitles->isSubtitledAudioPlaying()) {
-		_vm->_subtitles->markSubtitlesDirty(this);
-	}
+	_vm->_sound->timerCallback();
 
 	switch (_status) {
 	case 0:
