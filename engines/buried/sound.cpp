@@ -50,6 +50,7 @@ static inline int clipVolume(int volume) {
 SoundManager::SoundManager(BuriedEngine *vm) : _vm(vm) {
 	_fileIDFootsteps = -1;
 	_lastAmbient = 1;
+	_lastSubtitledAudioPlaying = false;
 	startup();
 }
 
@@ -763,6 +764,12 @@ bool SoundManager::restart() {
 void SoundManager::timerCallback() {
 	if (_paused)
 		return;
+
+	bool currentSubtitledPlaying = _vm->_subtitles && _vm->_subtitles->isSubtitledAudioPlaying();
+	if (currentSubtitledPlaying || _lastSubtitledAudioPlaying) {
+		_vm->_subtitles->markSubtitlesDirty(_vm->getTopWindow());
+		_lastSubtitledAudioPlaying = currentSubtitledPlaying;
+	}
 
 	// Check the playing sounds, and if they are playing, check for time-based effects
 	for (int i = 0; i < kMaxSounds; i++) {

@@ -187,6 +187,7 @@ private:
 	// Start time, in milliseconds, for currently-playing sound effects.
 	uint32 _sfxStartTime[2];
 	Common::String _interfaceMediaId;
+	bool _lastSubtitledAudioPlaying;
 };
 
 } // End of namespace Buried
