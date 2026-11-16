@@ -80,6 +80,8 @@ private:
 	Graphics::Surface *_ownedFrame;
 	bool _needsPalConversion;
 	Common::Rect _srcRect, _dstRect;
+	Common::Path _filePath;
+	bool _lastSubtitledPlaying;
 };
 
 } // End of namespace Buried

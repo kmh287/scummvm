@@ -23,6 +23,7 @@
 #include "buried/buried.h"
 #include "buried/graphics.h"
 #include "buried/scene_view.h"
+#include "buried/sound.h"
 #include "buried/window.h"
 
 #include "common/algorithm.h"
@@ -217,6 +218,20 @@ bool SubtitleRenderer::renderForMedia(Graphics::Surface *destSurface, const Comm
 	_lastRenderedBounds = layout.clippedBounds;
 	_vm->_gfx->invalidateRect(layout.clippedBounds, /* erase= */ false);
 	return true;
+}
+
+bool SubtitleRenderer::renderForActiveAudio(Graphics::Surface *destSurface) {
+	if (!destSurface || !SubtitleManager::areSubtitlesEnabled() || !_vm->_sound) {
+		return false;
+	}
+
+	Common::Path filePath;
+	uint32 currentMs = 0;
+	if (!_vm->_sound->getActiveSubtitledAudio(filePath, currentMs)) {
+		return false;
+	}
+
+	return renderForMedia(destSurface, getDefaultBoxBounds(), filePath, currentMs);
 }
 
 bool SubtitleRenderer::renderForVideo(Graphics::Surface *destSurface, const Window *videoWindow, const Common::Path &filePath, uint32 currentMs, const Common::Rect &mediaRect) {

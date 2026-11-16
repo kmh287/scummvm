@@ -91,6 +91,13 @@ public:
 	// TIMER CALLBACK FUNCTION
 	void timerCallback();
 
+	// Returns true if any audio channel is currently playing subtitled media.
+	bool isSubtitledAudioPlaying() const;
+
+	// Resolves the highest-priority audio channel currently playing subtitled media,
+	// populating its file path and playback position in milliseconds.
+	bool getActiveSubtitledAudio(Common::Path &filePath, uint32 &positionMs) const;
+
 private:
 	enum {
 		kAmbientIndexBase = 0,
@@ -150,6 +157,14 @@ private:
 	Common::Path _effectsFileNames[2];
 	Common::Path _interfaceFileName;
 	Common::Path _arthurFileName;
+
+	bool tryGetChannelSubtitleState(int soundIndex, const Common::Path &candidatePath, Common::Path &filePath, uint32 &positionMs) const;
+
+	Common::Path _currentAIVoicePath;
+	int _syncSoundChannel;
+	Common::Path _sfxPaths[2];
+	Common::Path _interfacePath;
+	bool _lastSubtitledAudioPlaying;
 };
 
 } // End of namespace Buried

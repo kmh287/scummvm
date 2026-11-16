@@ -469,6 +469,12 @@ void BuriedEngine::yield(VideoWindow *video, int soundId) {
 	if ((video || soundId >= 0) && _allowVideoSkip)
 		processAudioVideoSkipMessages(video, soundId);
 
+	// Sometimes, the game yields while a character is speaking to block UI interaction. Mark subtitles dirty
+	// here so multi-card dialogue updates during synchronous playback.
+	if (_subtitleRenderer && _sound && _sound->isSubtitledAudioPlaying()) {
+		_subtitleRenderer->markDirty(_mainWindow);
+	}
+
 	_gfx->updateScreen();
 	_system->delayMillis(10);
 

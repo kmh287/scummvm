@@ -31,6 +31,7 @@
 #include "buried/navarrow.h"
 #include "buried/resources.h"
 #include "buried/sound.h"
+#include "buried/subtitle_renderer.h"
 #include "buried/scene_view.h"
 #include "buried/environ/scene_common.h"
 
@@ -648,6 +649,8 @@ int InteractiveNewsNetwork::movieCallback(Window *viewWindow, VideoWindow *movie
 	// Restart sound if the movie has ended
 	if (animationID == -1 && status == MOVIE_STOPPED) {
 		_vm->_sound->restart();
+		// Remove any lingering subtitle card from the clip.
+		_vm->_subtitleRenderer->markDirty(viewWindow);
 		return SC_FALSE;
 	}
 

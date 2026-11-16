@@ -65,6 +65,9 @@ public:
 	// Marks the target window and subtitle box region dirty so subtitles are redrawn or cleared on the next frame.
 	void markDirty(Window *targetWindow);
 
+	// Renders subtitles for whatever audio channel is currently playing subtitled media onto the destination surface.
+	bool renderForActiveAudio(Graphics::Surface *destSurface);
+
 	// Renders subtitles for the specified video window at the specified playback time onto the destination surface.
 	bool renderForVideo(Graphics::Surface *destSurface, const Window *videoWindow, const Common::Path &filePath, uint32 currentMs, const Common::Rect &mediaRect);
 
