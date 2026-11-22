@@ -33,6 +33,8 @@
 #include "buried/graphics.h"
 #include "buried/resources.h"
 #include "buried/sound.h"
+#include "buried/subtitle_manager.h"
+#include "buried/subtitle_renderer.h"
 
 namespace Buried {
 
@@ -48,6 +50,8 @@ static inline int clipVolume(int volume) {
 SoundManager::SoundManager(BuriedEngine *vm) : _vm(vm) {
 	_fileIDFootsteps = -1;
 	_lastAmbient = 1;
+	_syncSoundChannel = -1;
+	_lastSubtitledAudioPlaying = false;
 	startup();
 }
 
@@ -360,6 +364,7 @@ bool SoundManager::playSynchronousAIComment(const Common::Path &fileName) {
 	// Now that is has been played, kill it here and now
 	delete _soundData[kAIVoiceIndex];
 	_soundData[kAIVoiceIndex] = new Sound();
+	invalidateSubtitles();
 
 	_vm->enableCutsceneKeymap(false);
 
@@ -394,6 +399,7 @@ bool SoundManager::isAsynchronousAICommentPlaying() {
 void SoundManager::stopAsynchronousAIComment() {
 	if (isAsynchronousAICommentPlaying()) {
 		_soundData[kAIVoiceIndex]->stop();
+		invalidateSubtitles();
 	}
 }
 
@@ -447,6 +453,9 @@ bool SoundManager::playSynchronousSoundEffect(const Common::Path &fileName, int 
 	if (soundChannel < 0)
 		return false;
 
+	// Prioritize this blocking SFX channel's subtitles ahead of any background async audio.
+	_syncSoundChannel = soundChannel;
+
 	_vm->enableCutsceneKeymap(true);
 
 	// Otherwise, assume the sound has started playing and enter a wait and see loop until
@@ -458,6 +467,9 @@ bool SoundManager::playSynchronousSoundEffect(const Common::Path &fileName, int 
 
 	// One last callback check
 	timerCallback();
+
+	_syncSoundChannel = -1;
+	invalidateSubtitles();
 
 	_vm->enableCutsceneKeymap(false);
 
@@ -477,8 +489,13 @@ bool SoundManager::stopSoundEffect(int effectID) {
 	if (effectID < 0 || effectID > 1)
 		return false;
 
+	bool stopped = _soundData[kEffectsIndexBase + effectID]->stop();
+	if (stopped) {
+		invalidateSubtitles();
+	}
+
 	// Return the result
-	return _soundData[kEffectsIndexBase + effectID]->stop();
+	return stopped;
 }
 
 bool SoundManager::isSoundEffectPlaying(int effectID) {
@@ -564,6 +581,7 @@ bool SoundManager::stopInterfaceSound() {
 	// Stop the sound
 	delete _soundData[kInterfaceIndex];
 	_soundData[kInterfaceIndex] = new Sound();
+	invalidateSubtitles();
 	return true;
 }
 
@@ -632,6 +650,7 @@ bool SoundManager::stop() {
 	}
 
 	_paused = true;
+	invalidateSubtitles();
 	return true;
 }
 
@@ -704,6 +723,59 @@ void SoundManager::timerCallback() {
 			}
 		}
 	}
+
+	// Invalidate the main window both while subtitled audio is playing (so multi-card lines
+	// advance over static scenes as playback progresses) and on the first tick after it
+	// stops (so the final subtitle card is erased from the screen).
+	bool currentSubtitledPlaying = _vm->_subtitles && _vm->_subtitles->isSubtitledAudioPlaying();
+	if (currentSubtitledPlaying || _lastSubtitledAudioPlaying) {
+		if (_vm->_subtitleRenderer) {
+			_vm->_subtitleRenderer->markDirty(_vm->_mainWindow);
+		}
+		_lastSubtitledAudioPlaying = currentSubtitledPlaying;
+	}
+}
+
+void SoundManager::invalidateSubtitles() {
+	_lastSubtitledAudioPlaying = false;
+	if (_vm->_subtitleRenderer) {
+		_vm->_subtitleRenderer->markDirty(_vm->_mainWindow);
+	}
+}
+
+Common::Array<SoundManager::ActiveSound> SoundManager::getActiveSounds() const {
+	Common::Array<ActiveSound> activeSounds;
+	if (_paused) {
+		return activeSounds;
+	}
+
+	// Check speech/SFX channels in subtitle priority order:
+	// 1. A blocking synchronous sound effect (if one is active)
+	// 2. Arthur's AI voice channel
+	// 3. Interface audio (e.g. the interface overview tutorial)
+	// 4. Asynchronous sound effect channels (skipping whichever channel was already checked in #1)
+	int candidateIndices[] = {
+		(_syncSoundChannel >= 0 && _syncSoundChannel < 2) ? (kEffectsIndexBase + _syncSoundChannel) : -1,
+		kAIVoiceIndex,
+		kInterfaceIndex,
+		(_syncSoundChannel == 0) ? -1 : kEffectsIndexA,
+		(_syncSoundChannel == 1) ? -1 : kEffectsIndexB
+	};
+
+	for (int index : candidateIndices) {
+		if (index < 0) {
+			continue;
+		}
+		const Sound *sound = _soundData[index];
+		if (sound->isPlaying() && !sound->_filePath.empty()) {
+			ActiveSound active;
+			active.filePath = sound->_filePath;
+			active.positionMs = g_system->getMixer()->getSoundElapsedTime(*sound->_handle);
+			activeSounds.push_back(active);
+		}
+	}
+
+	return activeSounds;
 }
 
 SoundManager::Sound::Sound() {
@@ -731,6 +803,7 @@ SoundManager::Sound::~Sound() {
 }
 
 bool SoundManager::Sound::load(const Common::Path &fileName) {
+	_filePath.clear();
 	if (fileName.empty())
 		return false;
 
@@ -740,7 +813,12 @@ bool SoundManager::Sound::load(const Common::Path &fileName) {
 		return false;
 
 	_soundData = Audio::makeWAVStream(stream, DisposeAfterUse::YES);
-	return _soundData != nullptr;
+	if (!_soundData) {
+		return false;
+	}
+
+	_filePath = fileName;
+	return true;
 }
 
 bool SoundManager::Sound::start() {

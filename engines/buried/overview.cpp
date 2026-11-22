@@ -28,6 +28,7 @@
 #include "buried/overview.h"
 #include "buried/resources.h"
 #include "buried/sound.h"
+#include "buried/subtitle_manager.h"
 
 #include "graphics/surface.h"
 
@@ -79,7 +80,10 @@ bool OverviewWindow::startOverview() {
 	invalidateWindow();
 	setFocus();
 
-	_timer = setTimer(1000);
+	// Originally 1000ms, which only needed to advance overview visuals between states.
+	// Use 250ms so onTimer() pumps SoundManager::timerCallback() frequently enough to keep
+	// multi-card subtitles in sync while each state's voiceover plays.
+	_timer = setTimer(250);
 	return true;
 }
 
@@ -110,6 +114,8 @@ void OverviewWindow::onPaint() {
 			break;
 		}
 	}
+
+	_vm->_subtitles->renderActiveAudio(_vm->_gfx->getScreen());
 }
 
 bool OverviewWindow::onEraseBackground() {

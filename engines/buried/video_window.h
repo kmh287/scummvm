@@ -74,12 +74,16 @@ public:
 	void onActionEnd(const Common::CustomEventType &action, uint flags);
 
 private:
+	void clearSubtitles();
+
 	Video::VideoDecoder *_video;
 	const Graphics::Surface *_lastFrame;
 	Mode _mode;
 	Graphics::Surface *_ownedFrame;
 	bool _needsPalConversion;
 	Common::Rect _srcRect, _dstRect;
+	Common::Path _filePath;
+	bool _hasSubtitles;
 };
 
 } // End of namespace Buried

@@ -22,6 +22,8 @@
 #ifndef BURIED_SUBTITLE_RENDERER_H
 #define BURIED_SUBTITLE_RENDERER_H
 
+#include "buried/subtitle_manager.h"
+
 #include "common/path.h"
 #include "common/ptr.h"
 #include "common/rect.h"
@@ -35,7 +37,6 @@ struct Surface;
 namespace Buried {
 
 class BuriedEngine;
-class SubtitleManager;
 class Window;
 
 class SubtitleRenderer {
@@ -62,6 +63,10 @@ public:
 
 	// Marks the target window and subtitle box region dirty so subtitles are redrawn or cleared on the next frame.
 	void markDirty(Window *targetWindow);
+
+	// Renders the specified subtitle card onto the destination surface, positioned above aboveRect when provided
+	// or inside the default HUD subtitle region otherwise.
+	bool renderSubtitle(Graphics::Surface *destSurface, const SubtitleManager::Subtitle &subtitle, const Common::Rect *aboveRect = nullptr);
 
 	// Renders subtitles for the specified video window at the specified playback time onto the destination surface.
 	bool renderForVideo(Graphics::Surface *destSurface, const Window *videoWindow, const Common::Path &filePath, uint32 currentMs, const Common::Rect &mediaRect);

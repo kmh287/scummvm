@@ -26,6 +26,8 @@
 #define BURIED_SOUND_H
 
 #include "audio/mixer.h"
+#include "common/array.h"
+#include "common/path.h"
 #include "common/str.h"
 
 namespace Audio {
@@ -91,6 +93,17 @@ public:
 	// TIMER CALLBACK FUNCTION
 	void timerCallback();
 
+	struct ActiveSound {
+		Common::Path filePath;
+		uint32 positionMs = 0;
+	};
+
+	// Returns all currently playing speech, interface, and sound-effect channels in
+	// priority order (blocking synchronous SFX, AI voice, interface audio, asynchronous SFX).
+	// Excludes ambient music and footsteps, and returns an empty array when sound is paused
+	// or none of those channels are playing.
+	Common::Array<ActiveSound> getActiveSounds() const;
+
 private:
 	enum {
 		kAmbientIndexBase = 0,
@@ -136,6 +149,7 @@ private:
 
 		bool _wasPlaying;
 		Audio::Mixer::SoundType _soundType;
+		Common::Path _filePath;
 	};
 
 	BuriedEngine *_vm;
@@ -150,6 +164,12 @@ private:
 	Common::Path _effectsFileNames[2];
 	Common::Path _interfaceFileName;
 	Common::Path _arthurFileName;
+
+	void invalidateSubtitles();
+
+	// SFX channel index (0 or 1) currently blocking in playSynchronousSoundEffect(), or -1 if none.
+	int _syncSoundChannel;
+	bool _lastSubtitledAudioPlaying;
 };
 
 } // End of namespace Buried

@@ -395,18 +395,13 @@ void SubtitleRenderer::markDirty(Window *targetWindow) {
 	}
 }
 
-bool SubtitleRenderer::renderForMedia(Graphics::Surface *destSurface, const Common::Path &filePath, uint32 currentMs, const Common::Rect *aboveRect) {
-	if (!destSurface || !SubtitleManager::areSubtitlesEnabled() || !_subtitles || !_fonts.regular || !_fonts.bold) {
-		return false;
-	}
-
-	const SubtitleManager::Subtitle *subtitle = _subtitles->getSubtitleForTime(filePath, currentMs);
-	if (!subtitle || subtitle->text.empty()) {
+bool SubtitleRenderer::renderSubtitle(Graphics::Surface *destSurface, const SubtitleManager::Subtitle &subtitle, const Common::Rect *aboveRect) {
+	if (!destSurface || !SubtitleManager::areSubtitlesEnabled() || subtitle.text.empty() || !_fonts.regular || !_fonts.bold) {
 		return false;
 	}
 
 	SubtitleLayout layout = buildSubtitleLayout(
-		*subtitle,
+		subtitle,
 		*_fonts.regular,
 		*_fonts.bold,
 		aboveRect,
@@ -425,6 +420,19 @@ bool SubtitleRenderer::renderForMedia(Graphics::Surface *destSurface, const Comm
 	// runs copyRectToScreen() so the full rendered box is blitted to the display this frame.
 	_vm->_gfx->invalidateRect(layout.boxBounds, /* erase= */ false);
 	return true;
+}
+
+bool SubtitleRenderer::renderForMedia(Graphics::Surface *destSurface, const Common::Path &filePath, uint32 currentMs, const Common::Rect *aboveRect) {
+	if (!_subtitles) {
+		return false;
+	}
+
+	const SubtitleManager::Subtitle *subtitle = _subtitles->getSubtitleForTime(filePath, currentMs);
+	if (!subtitle) {
+		return false;
+	}
+
+	return renderSubtitle(destSurface, *subtitle, aboveRect);
 }
 
 bool SubtitleRenderer::renderForVideo(Graphics::Surface *destSurface, const Window *videoWindow, const Common::Path &filePath, uint32 currentMs, const Common::Rect &mediaRect) {

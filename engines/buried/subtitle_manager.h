@@ -27,7 +27,13 @@
 #include "common/scummsys.h"
 #include "common/ustr.h"
 
+namespace Graphics {
+struct Surface;
+}
+
 namespace Buried {
+
+class BuriedEngine;
 
 class SubtitleManager {
 public:
@@ -39,7 +45,7 @@ public:
 		Common::U32String text;
 	};
 
-	SubtitleManager();
+	explicit SubtitleManager(BuriedEngine *vm);
 	~SubtitleManager();
 
 	// Returns true if subtitles are enabled in configuration and false otherwise.
@@ -51,8 +57,18 @@ public:
 	// Returns the Subtitle for the specified media file and playback time, or nullptr if none matches.
 	const Subtitle *getSubtitleForTime(const Common::Path &filePath, uint32 currentMs) const;
 
+	// Returns true if sound is unpaused and at least one currently playing audio channel has a
+	// subtitle track; returns false if no audio is playing, sound is paused, or playing audio
+	// has no subtitle track.
+	bool isSubtitledAudioPlaying() const;
+
+	// Resolves the highest-priority subtitled audio channel currently playing and renders its
+	// active subtitle card (if any at the current playback time) onto destSurface.
+	bool renderActiveAudio(Graphics::Surface *destSurface) const;
+
 private:
 	struct TrackMap;
+	BuriedEngine *_vm;
 	const Common::ScopedPtr<const TrackMap> _trackMap;
 };
 

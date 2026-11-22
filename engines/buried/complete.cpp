@@ -30,6 +30,7 @@
 #include "buried/graphics.h"
 #include "buried/resources.h"
 #include "buried/sound.h"
+#include "buried/subtitle_manager.h"
 #include "buried/video_window.h"
 
 #include "graphics/font.h"
@@ -108,6 +109,8 @@ void CompletionWindow::onPaint() {
 		Common::Rect finalScoreRect(122, 386, 283, 401);
 		_vm->_gfx->renderText(_vm->_gfx->getScreen(), _textFontB, _agentEvaluation->_scoringTextFinalScore, finalScoreRect.left, finalScoreRect.top, finalScoreRect.width(), finalScoreRect.height(), textColor, _fontHeightB, kTextAlignRight);
 	}
+
+	_vm->_subtitles->renderActiveAudio(_vm->_gfx->getScreen());
 }
 
 bool CompletionWindow::onEraseBackground() {
@@ -116,9 +119,14 @@ bool CompletionWindow::onEraseBackground() {
 }
 
 void CompletionWindow::onTimer(uint timer) {
+	_vm->_sound->timerCallback();
+
 	switch (_status) {
 	case 0:
 		_currentSoundEffectID = _vm->_sound->playSoundEffect("BITDATA/FUTAPT/FA_COURT.BTA");
+		// Switch from the initial 1000ms delay to 250ms so courtroom verdict subtitles stay synced.
+		killTimer(_timer);
+		_timer = setTimer(250);
 		_status = 1;
 		_background = _vm->_gfx->getBitmap(_vm->isTrueColor() ? "BITDATA/FUTAPT/CONGRATS.BTS" : "BITDATA/FUTAPT/CONGRAT8.BTS");
 		invalidateWindow(false);

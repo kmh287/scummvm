@@ -21,6 +21,10 @@
 
 #include "buried/subtitle_manager.h"
 
+#include "buried/buried.h"
+#include "buried/sound.h"
+#include "buried/subtitle_renderer.h"
+
 #include "common/array.h"
 #include "common/config-manager.h"
 #include "common/debug.h"
@@ -213,6 +217,17 @@ SubtitleTrackMap loadSubtitlesData() {
 	return readTracks(file, toc);
 }
 
+// Returns the highest-priority currently playing sound channel that has a subtitle track,
+// or a default ActiveSound (with empty filePath) if none matches.
+SoundManager::ActiveSound findActiveSubtitledSound(const SoundManager &soundManager, const SubtitleManager &subtitles) {
+	for (const SoundManager::ActiveSound &sound : soundManager.getActiveSounds()) {
+		if (subtitles.hasSubtitleTrack(sound.filePath)) {
+			return sound;
+		}
+	}
+	return SoundManager::ActiveSound();
+}
+
 } // End of anonymous namespace
 
 struct SubtitleManager::TrackMap {
@@ -221,7 +236,7 @@ struct SubtitleManager::TrackMap {
 	TrackMap() : tracks(loadSubtitlesData()) {}
 };
 
-SubtitleManager::SubtitleManager() : _trackMap(new TrackMap()) {
+SubtitleManager::SubtitleManager(BuriedEngine *vm) : _vm(vm), _trackMap(new TrackMap()) {
 }
 
 SubtitleManager::~SubtitleManager() = default;
@@ -254,6 +269,31 @@ const SubtitleManager::Subtitle *SubtitleManager::getSubtitleForTime(const Commo
 	}
 
 	return nullptr;
+}
+
+bool SubtitleManager::isSubtitledAudioPlaying() const {
+	if (!_vm || !_vm->_sound || !_trackMap) {
+		return false;
+	}
+	return !findActiveSubtitledSound(*_vm->_sound, *this).filePath.empty();
+}
+
+bool SubtitleManager::renderActiveAudio(Graphics::Surface *destSurface) const {
+	if (!destSurface || !areSubtitlesEnabled() || !_vm || !_vm->_sound || !_vm->_subtitleRenderer || !_trackMap) {
+		return false;
+	}
+
+	SoundManager::ActiveSound activeSound = findActiveSubtitledSound(*_vm->_sound, *this);
+	if (activeSound.filePath.empty()) {
+		return false;
+	}
+
+	const Subtitle *subtitle = getSubtitleForTime(activeSound.filePath, activeSound.positionMs);
+	if (!subtitle) {
+		return false;
+	}
+
+	return _vm->_subtitleRenderer->renderSubtitle(destSurface, *subtitle);
 }
 
 } // End of namespace Buried

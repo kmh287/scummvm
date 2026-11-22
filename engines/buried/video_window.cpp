@@ -21,6 +21,8 @@
 
 #include "buried/buried.h"
 #include "buried/graphics.h"
+#include "buried/subtitle_manager.h"
+#include "buried/subtitle_renderer.h"
 #include "buried/video_window.h"
 
 #include "common/system.h"
@@ -30,7 +32,7 @@
 
 namespace Buried {
 
-VideoWindow::VideoWindow(BuriedEngine *vm, Window *parent) : Window(vm, parent), _video(nullptr), _mode(kModeClosed), _lastFrame(nullptr) {
+VideoWindow::VideoWindow(BuriedEngine *vm, Window *parent) : Window(vm, parent), _video(nullptr), _mode(kModeClosed), _lastFrame(nullptr), _hasSubtitles(false) {
 	_vm->addVideo(this);
 	_needsPalConversion = false;
 	_ownedFrame = nullptr;
@@ -78,11 +80,19 @@ bool VideoWindow::seekToFrame(int frame) {
 	return _video->seekToFrame(frame);
 }
 
+void VideoWindow::clearSubtitles() {
+	if (_hasSubtitles && _vm->_subtitleRenderer) {
+		// Subtitles render outside VideoWindow's bounds, so invalidate the parent window to erase them.
+		_vm->_subtitleRenderer->markDirty(getParent());
+	}
+}
+
 void VideoWindow::stopVideo() {
 	if (_video) {
 		_vm->_gfx->toggleCursor(true);
 		_video->stop();
 		_mode = kModeStopped;
+		clearSubtitles();
 	}
 }
 
@@ -109,6 +119,8 @@ bool VideoWindow::openVideo(const Common::Path &fileName) {
 		closeVideo();
 		return false;
 	}
+	_filePath = fileName;
+	_hasSubtitles = _vm->_subtitles && _vm->_subtitles->hasSubtitleTrack(fileName);
 	_video->setSoundType(Audio::Mixer::kSFXSoundType);
 
 	if (!_vm->isTrueColor()) {
@@ -130,6 +142,9 @@ bool VideoWindow::openVideo(const Common::Path &fileName) {
 
 void VideoWindow::closeVideo() {
 	if (_video) {
+		clearSubtitles();
+		_filePath.clear();
+		_hasSubtitles = false;
 		delete _video;
 		_video = nullptr;
 		_vm->_gfx->toggleCursor(true);
@@ -178,12 +193,15 @@ void VideoWindow::updateVideo() {
 
 			// Invalidate the window so it gets updated
 			invalidateWindow(false);
+			// Subtitles sit outside VideoWindow's own rect (in the HUD bar or below standalone
+			// cutscenes), so also mark the subtitle overlay region dirty as frames advance.
+			if (_video->isPlaying() && _hasSubtitles && _vm->_subtitleRenderer) {
+				_vm->_subtitleRenderer->markDirty(this);
+			}
 		}
 
 		if (_video->isPlaying() && _video->endOfVideo()) {
-			_video->stop();
-			_vm->_gfx->toggleCursor(true);
-			_mode = kModeStopped;
+			stopVideo();
 		}
 	}
 }
@@ -191,11 +209,22 @@ void VideoWindow::updateVideo() {
 void VideoWindow::onPaint() {
 	if (_lastFrame) {
 		Common::Rect absoluteRect = getAbsoluteRect();
+		Common::Rect videoFrameRect = absoluteRect;
 
-		if (_srcRect.isEmpty() && _dstRect.isEmpty())
+		if (_srcRect.isEmpty() && _dstRect.isEmpty()) {
 			_vm->_gfx->blit(_lastFrame, absoluteRect.left, absoluteRect.top, absoluteRect.width(), absoluteRect.height());
-		else
-			_vm->_gfx->crossBlit(_vm->_gfx->getScreen(), absoluteRect.left + _dstRect.left, absoluteRect.top + _dstRect.top, _dstRect.width(), _dstRect.height(), _lastFrame, _srcRect.left, _srcRect.top);
+		} else {
+			videoFrameRect = Common::Rect(
+				absoluteRect.left + _dstRect.left,
+				absoluteRect.top + _dstRect.top,
+				absoluteRect.left + _dstRect.right,
+				absoluteRect.top + _dstRect.bottom);
+			_vm->_gfx->crossBlit(_vm->_gfx->getScreen(), videoFrameRect.left, videoFrameRect.top, _dstRect.width(), _dstRect.height(), _lastFrame, _srcRect.left, _srcRect.top);
+		}
+
+		if (_video && _video->isPlaying() && _hasSubtitles && _vm->_subtitleRenderer) {
+			_vm->_subtitleRenderer->renderForVideo(_vm->_gfx->getScreen(), this, _filePath, _video->getTime(), videoFrameRect);
+		}
 	}
 }
 

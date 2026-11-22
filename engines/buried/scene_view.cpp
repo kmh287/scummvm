@@ -35,6 +35,7 @@
 #include "buried/resources.h"
 #include "buried/scene_view.h"
 #include "buried/sound.h"
+#include "buried/subtitle_manager.h"
 #include "buried/video_window.h"
 #include "buried/environ/scene_base.h"
 
@@ -2412,6 +2413,8 @@ void SceneViewWindow::onPaint() {
 
 		if (_useScenePaint)
 			_currentScene->gdiPaint(this);
+
+		_vm->_subtitles->renderActiveAudio(_vm->_gfx->getScreen());
 	}
 }
 

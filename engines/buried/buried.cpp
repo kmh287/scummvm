@@ -136,7 +136,7 @@ Common::Error BuriedEngine::run() {
 
 	_gfx = new GraphicsManager(this);
 	_sound = new SoundManager(this);
-	_subtitles = new SubtitleManager();
+	_subtitles = new SubtitleManager(this);
 	_subtitleRenderer = new SubtitleRenderer(this, _subtitles);
 	_mainWindow = new FrameWindow(this);
 	_mainWindow->showWindow(Window::kWindowShow);
@@ -468,6 +468,12 @@ void BuriedEngine::yield(VideoWindow *video, int soundId) {
 	// as our main loop.
 	if ((video || soundId >= 0) && _allowVideoSkip)
 		processAudioVideoSkipMessages(video, soundId);
+
+	// Sometimes, the game yields while a character is speaking to block UI interaction. Mark subtitles dirty
+	// here so multi-card dialogue updates during synchronous playback.
+	if (_subtitleRenderer && _subtitles && _subtitles->isSubtitledAudioPlaying()) {
+		_subtitleRenderer->markDirty(_mainWindow);
+	}
 
 	_gfx->updateScreen();
 	_system->delayMillis(10);
